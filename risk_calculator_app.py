@@ -9,8 +9,6 @@ st.image(logo, width=150)
 
 st.title("📊 1% Risk Management Calculator")
 
-import streamlit as st
-
 account_balance = st.number_input("Account Balance (SEK)", min_value=1.0, value=10000.0)
 risk_percent = st.number_input("Risk % per trade", min_value=0.1, max_value=100.0, value=1.0)
 entry_price = st.number_input("Entry Price (SEK)", min_value=0.01, value=100.0)
