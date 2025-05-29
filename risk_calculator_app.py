@@ -1,4 +1,15 @@
 import streamlit as st
+from PIL import Image
+
+st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
+
+# Load and display logo
+logo = Image.open("logo.png")
+st.image(logo, width=150)
+
+st.title("📊 1% Risk Management Calculator")
+
+import streamlit as st
 
 st.title("📊 1% Risk Management Calculator")
 
