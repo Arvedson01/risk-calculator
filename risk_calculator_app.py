@@ -26,7 +26,7 @@ with st.expander("ℹ️ What this tool does"):
 
 # 📥 User Inputs
 st.subheader("📥 Inputs")
-total_capital = st.number_input("💼 Total Capital ($)", min_value=0.0, value=0)
+total_capital = st.number_input("💼 Total Capital ($)", min_value=0.0, value=1)
 liquid_capital = st.number_input("💧 Liquid Capital for Trading ($)", min_value=0.0, value=0)
 risk_percent = st.number_input("⚠️ Risk % per trade", min_value=0.1, max_value=100.0, value=1.0)
 entry_price = st.number_input("🎯 Entry Price ($)", min_value=0.01, value=0)
