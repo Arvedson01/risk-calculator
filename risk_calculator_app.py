@@ -39,7 +39,7 @@ reward_to_risk = expected_reward / risk_amount if risk_amount > 0 else 0
 # 📊 Results Display
 st.subheader("📈 Trade Summary")
 st.write(f"💰 Max Risk Allowed: ${risk_amount:,.2f}")
-st.write(f"📦 Suggested Position Size: {adjusted_position_size:,.0f} units")
+st.write(f"📦 Suggested Position Size:", f"{position_size:,.0f} units")
 st.write(f"💸 Total Trade Cost (with leverage): ${total_trade_cost:,.2f}")
 st.write(f"🎯 Expected Reward: ${expected_reward:,.2f}")
 st.write(f"⚖️ Reward-to-Risk Ratio: {reward_to_risk:.2f}")
