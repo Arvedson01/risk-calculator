@@ -24,14 +24,25 @@ with st.expander("ℹ️ What this tool does"):
     - It will even suggest where your stop loss and RR ratio is — if you're unsure!
     """)
 
-# 📥 User Inputs
+# --- Section: User Inputs ---
 st.subheader("📥 Inputs")
-total_capital = st.number_input("💼 Total Capital ($)", min_value=0.0, value=0.0)
-liquid_capital = st.number_input("💧 Liquid Capital for Trading ($)", min_value=0.0, value=0.0)
-risk_percent = st.number_input("⚠️ Risk % per trade", min_value=0.0, max_value=100.0, value=0.0)
-entry_price = st.number_input("🎯 Entry Price ($)", min_value=0.0, value=0.0)  # Allow 0
-direction = st.radio("📈 Are you going long or short?", ["Long", "Short"])
-leverage = st.number_input("🪜 Leverage (e.g. 1 = no leverage)", min_value=1.0, value=1.0)
+# ... other inputs like entry_price, capital, etc.
+
+# --- Section: Suggested Stop Logic ---
+if entry_price > 0:
+    suggested_stop = entry_price * 0.97  # Example: 3% stop below entry
+else:
+    suggested_stop = 0.0
+
+# Fix to avoid StreamlitValueBelowMinError
+safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
+
+# --- Section: Stop Loss Input ---
+stop_loss_price = st.number_input(
+    "🛑 Stop Loss Price ($) (Suggested: {:.2f})".format(safe_suggested_stop),
+    min_value=0.01,
+    value=safe_suggested_stop
+)
 
 # 🧮 Stop Loss Suggestion
 # Calculate stop loss that aligns with 1% risk on liquid capital
