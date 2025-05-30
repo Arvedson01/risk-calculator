@@ -1,90 +1,86 @@
 import streamlit as st
+from PIL import Image
 
-# ✅ Must come before anything else Streamlit-related
+# ✅ Page configuration MUST be here
 st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
 
-# 🧹 Optional: clear dev cache
+# (Optional) Clear cache
 st.cache_data.clear()
 
-# 🧠 Start of app
+# 📸 Load and display logo
+logo = Image.open("logo.png")
+st.image(logo, width=150)
+
+# 🧠 App title
 st.title("📊 1% Risk Management Calculator (Pro Edition)")
 
-# ─── Page Setup ─────────────────────────────────────────────────────────────
-st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
-st.title("📊 1% Risk Management Calculator (Pro Edition)")
+# 📄 Tool Description
+with st.expander("ℹ️ What this tool does"):
+    st.markdown("""
+    This tool helps you calculate your position size, stop loss, and risk metrics based on:
+    - Total capital (for context)
+    - Liquid capital (for active trade sizing)
+    - Your entry price, stop loss, target, and leverage
+    - It will even suggest where your stop loss and RR ratio is — if you're unsure!
+    """)
 
-# ─── Tool Description ───────────────────────────────────────────────────────
-st.markdown("""
-This tool helps you calculate your position size, stop loss, and risk metrics based on:
-- Total capital (for context)
-- Liquid capital (for actual trade sizing)
-- Entry, direction (long/short), target, and leverage
-- Automatically calculates your stop loss and RR ratio to stay within risk
-""")
-
-# ─── Inputs ─────────────────────────────────────────────────────────────────
-total_capital = st.number_input("💼 Total Capital (all holdings)", min_value=0.0, value=120000.0)
-liquid_capital = st.number_input("💧 Liquid Capital (available to trade)", min_value=0.0, value=60000.0)
+# 📥 User Inputs
+st.subheader("📥 Inputs")
+total_capital = st.number_input("💼 Total Capital ($)", min_value=0.0, value=120000.0)
+liquid_capital = st.number_input("💧 Liquid Capital for Trading ($)", min_value=0.0, value=50000.0)
 risk_percent = st.number_input("⚠️ Risk % per trade", min_value=0.1, max_value=100.0, value=1.0)
-entry_price = st.number_input("🎯 Entry Price", min_value=0.0001, value=1.0)
-target_price = st.number_input("🎯 Target Price", min_value=0.0001, value=1.5)
-direction = st.radio("📈 Trade Direction", ["Long", "Short"], horizontal=True)
-leverage = st.number_input("⚙️ Leverage (e.g. 1 = no leverage)", min_value=1.0, value=1.0)
+entry_price = st.number_input("🎯 Entry Price ($)", min_value=0.01, value=7.34)
+direction = st.radio("📈 Are you going long or short?", ["Long", "Short"])
+leverage = st.number_input("🪜 Leverage (e.g. 1 = no leverage)", min_value=1.0, value=5.0)
 
-# ─── Core Logic ─────────────────────────────────────────────────────────────
+# 🧮 Stop Loss Suggestion
+# Calculate stop loss that aligns with 1% risk on liquid capital
 risk_amount = liquid_capital * (risk_percent / 100)
-
-# Position size: how many units you can buy without exceeding risk
-# We'll use a temporary risk_per_unit to reverse-engineer stop loss
-position_size = None
-stop_loss_price = None
-risk_per_unit = None
-
-# Calculate stop loss price based on 1% risk
-position_size = 1  # Start from 1 unit temporarily
-risk_per_unit = risk_amount / position_size
-
+stop_loss_buffer = risk_amount / leverage / 1000  # crude estimate
 if direction == "Long":
-    stop_loss_price = entry_price - (risk_amount / 1)  # to be corrected later
+    suggested_stop = entry_price - stop_loss_buffer
 else:
-    stop_loss_price = entry_price + (risk_amount / 1)
+    suggested_stop = entry_price + stop_loss_buffer
 
-# Now calculate correct position size based on proper stop distance
-true_risk_per_unit = abs(entry_price - stop_loss_price)
-position_size = risk_amount / true_risk_per_unit
+stop_loss_price = st.number_input("🛑 Stop Loss Price ($) (Suggested: {:.2f})".format(suggested_stop), min_value=0.01, value=round(suggested_stop, 2))
+target_price = st.number_input("🎯 Target Price ($)", min_value=0.01, value=22.00)
 
-# Calculate reward and RR ratio
+# 🧮 Core Calculations
+risk_per_unit = abs(entry_price - stop_loss_price)
+position_size = risk_amount / risk_per_unit
+total_trade_cost = (position_size * entry_price) / leverage
 reward_per_unit = abs(target_price - entry_price)
 expected_reward = reward_per_unit * position_size
-reward_to_risk = expected_reward / risk_amount if risk_amount else 0
+reward_to_risk = expected_reward / risk_amount if risk_amount > 0 else 0
 
-# Calculate leveraged margin used
-gross_trade_value = position_size * entry_price
-margin_required = gross_trade_value / leverage
+# 📊 Results
+st.subheader("📈 Trade Summary")
+st.write(f"💰 Max Risk Allowed: ${risk_amount:,.2f}")
+st.write(f"📦 Suggested Position Size: {position_size:,.0f} units")
+st.write(f"💸 Your Capital at Risk (with leverage): ${total_trade_cost:,.2f}")
+st.write(f"🎯 Expected Reward: ${expected_reward:,.2f}")
+st.write(f"⚖️ Reward-to-Risk Ratio: {reward_to_risk:.2f}")
 
-# ─── Output ─────────────────────────────────────────────────────────────────
-st.markdown("---")
-st.subheader("📋 Trade Summary")
-st.write(f"🔹 Max Risk (1%): {risk_amount:,.2f}")
-st.write(f"🔹 Suggested Stop Loss: {stop_loss_price:.5f} ({direction})")
-st.write(f"🔹 Position Size: {position_size:,.0f} units")
-st.write(f"🔹 Gross Trade Value: {gross_trade_value:,.2f}")
-st.write(f"🔹 Margin Required (with {leverage:.1f}×): {margin_required:,.2f}")
-st.write(f"🔹 Expected Reward: {expected_reward:,.2f}")
-st.write(f"🔹 Reward-to-Risk Ratio: {reward_to_risk:.2f}")
-
-# ─── Warnings ───────────────────────────────────────────────────────────────
+# 🚨 Warnings
 if reward_to_risk < 2:
-    st.warning("⚠️ R:R is below 2:1 — trade may not be worth it.")
-if margin_required > liquid_capital:
-    st.error("🚫 Margin required exceeds your liquid capital!")
-if stop_loss_price <= 0:
-    st.error("❌ Invalid stop loss. Entry too small or risk too large.")
+    st.warning("⚠️ Reward-to-risk ratio is below 2:1!")
+if total_trade_cost > liquid_capital:
+    st.error("🚫 Trade size exceeds your available capital!")
 
-# ─── Disclaimer ─────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+# 📢 Disclaimer
+# ────────────────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("📢 Disclaimer")
 st.markdown("""
----
-📢 **Disclaimer**
-This tool is for educational purposes only and does not constitute financial advice.
-Always do your own research and consult a financial advisor before making trading decisions.
+This tool is provided for **educational purposes only** and does not constitute financial advice.
+
+Trading financial instruments involves risk, and you should never invest more than you can afford to lose.  
+Always do your own research or consult a licensed financial advisor before making investment decisions.
+
+By using this tool, you acknowledge that you are solely responsible for your trading activity.
 """)
+
+agree = st.checkbox("I acknowledge that I have read and understand the disclaimer above.")
+if not agree:
+    st.warning("Please confirm that you've read the disclaimer to use this calculator.")
