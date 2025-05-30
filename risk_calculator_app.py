@@ -21,15 +21,20 @@ stop_loss_price = st.number_input("Stop Loss Price ($)", min_value=0.0, value=95
 target_price = st.number_input("Target Price ($)", min_value=0.0, value=120.0)
 leverage = st.number_input("Leverage (e.g. 1 = no leverage)", min_value=1.0, value=1.0)
 
-# 🧮 Core Calculations
+# 🧮 Core Calculations (Fixed)
 risk_amount = account_balance * (risk_percent / 100)
 risk_per_unit = abs(entry_price - stop_loss_price)
+
+# Correct: Do NOT multiply position size by leverage
 position_size = risk_amount / risk_per_unit
-adjusted_position_size = position_size * leverage
-total_trade_cost = adjusted_position_size * entry_price
+
+# Apply leverage to cost only
+total_trade_cost = (position_size * entry_price) / leverage
+
+# Reward per unit and expected reward based on raw position size
 reward_per_unit = abs(target_price - entry_price)
-reward_to_risk = reward_per_unit / risk_per_unit
-expected_reward = reward_per_unit * adjusted_position_size
+expected_reward = reward_per_unit * position_size
+reward_to_risk = expected_reward / risk_amount if risk_amount > 0 else 0
 
 # 📊 Results Display
 st.subheader("📈 Trade Summary")
