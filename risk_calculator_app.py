@@ -44,3 +44,22 @@ if reward_to_risk < 2:
     st.warning("⚠️ Reward-to-risk ratio is below 2:1!")
 if total_trade_cost > account_balance:
     st.error("🚫 Trade size exceeds your available capital!")
+
+# ────────────────────────────────────────────────────────────────────────────────
+# 📢 Disclaimer
+# ────────────────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("📢 Disclaimer")
+st.markdown("""
+This tool is provided for **educational purposes only** and does not constitute financial advice.
+
+Trading financial instruments involves risk, and you should never invest more than you can afford to lose.  
+Always do your own research or consult a licensed financial advisor before making investment decisions.
+
+By using this tool, you acknowledge that you are solely responsible for your trading activity.
+""")
+
+# Optional: User acknowledgment checkbox
+agree = st.checkbox("I acknowledge that I have read and understand the disclaimer above.")
+if not agree:
+    st.warning("Please confirm that you've read the disclaimer to use this calculator.")
