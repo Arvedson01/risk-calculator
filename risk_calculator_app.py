@@ -26,6 +26,7 @@ leverage = st.number_input("Leverage (e.g. 1x, 2x, 5x)", min_value=1.0, value=1.
 # ─────────────────────────────────────────────────────────────────────────────
 # 🧮 Calculations
 # ─────────────────────────────────────────────────────────────────────────────
+# Calculations
 risk_amount = account_balance * (risk_percent / 100)
 risk_per_unit = abs(entry_price - stop_loss_price)
 position_size = risk_amount / risk_per_unit
@@ -33,7 +34,7 @@ leveraged_position_size = position_size * leverage
 total_trade_cost = leveraged_position_size * entry_price
 reward_per_unit = abs(target_price - entry_price)
 expected_reward = reward_per_unit * leveraged_position_size
-reward_risk_ratio = expected_reward / risk_amount if risk_amount > 0 else 0
+reward_risk_ratio = reward_per_unit / risk_per_unit
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 📊 Metrics
