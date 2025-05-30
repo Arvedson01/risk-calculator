@@ -1,7 +1,7 @@
 import streamlit as st
 from PIL import Image
 
-# ✅ Page configuration MUST be here
+# ✅ Page configuration
 st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
 
 # (Optional) Clear cache
@@ -21,7 +21,7 @@ with st.expander("ℹ️ What this tool does"):
     - Total capital (for context)
     - Liquid capital (for active trade sizing)
     - Your entry price, stop loss, target, and leverage
-    - It will even suggest where your stop loss and RR ratio is — if you're unsure!
+    - It will even suggest a stop loss if you're unsure!
     """)
 
 # --- Section: User Inputs ---
@@ -37,31 +37,30 @@ leverage = st.number_input("🪜 Leverage (e.g. 1 = no leverage)", min_value=1.0
 # 🧮 Risk Amount
 risk_amount = liquid_capital * (risk_percent / 100)
 
-# --- Section: Suggested Stop Logic ---
+# --- Suggested Stop Loss Calculation ---
 if entry_price > 0 and risk_amount > 0:
-    stop_loss_buffer = risk_amount / leverage / 1000  # crude estimate
+    stop_loss_buffer = risk_amount / leverage / 1000  # simple buffer estimate
     suggested_stop = entry_price - stop_loss_buffer if direction == "Long" else entry_price + stop_loss_buffer
 else:
-    suggested_stop = 0.0
+    suggested_stop = 0.01  # fallback minimum
 
 safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
 
+# --- Stop Loss & Target Price Inputs ---
 stop_loss_price = st.number_input(
     "🛑 Stop Loss Price ($)",
     min_value=0.01,
     value=safe_suggested_stop
 )
 
+safe_default_target = max(0.01, 0.0)
 target_price = st.number_input(
     "🎯 Target Price ($)",
     min_value=0.01,
     value=safe_default_target
 )
 
-safe_default_target = max(0.01, 0.0)  # Prevent StreamlitValueBelowMinError
-target_price = st.number_input("🎯 Target Price ($)", min_value=0.01, value=safe_default_target)
-
-# 🧮 Core Calculations
+# --- Core Calculations ---
 risk_per_unit = abs(entry_price - stop_loss_price)
 position_size = risk_amount / risk_per_unit if risk_per_unit > 0 else 0
 total_trade_cost = (position_size * entry_price) / leverage if leverage > 0 else 0
@@ -69,7 +68,7 @@ reward_per_unit = abs(target_price - entry_price)
 expected_reward = reward_per_unit * position_size
 reward_to_risk = expected_reward / risk_amount if risk_amount > 0 else 0
 
-# 📊 Results
+# --- Output Summary ---
 st.subheader("📈 Trade Summary")
 st.write(f"💰 Max Risk Allowed: ${risk_amount:,.2f}")
 st.write(f"📦 Suggested Position Size: {position_size:,.0f} units")
@@ -77,15 +76,13 @@ st.write(f"💸 Your Capital at Risk (with leverage): ${total_trade_cost:,.2f}")
 st.write(f"🎯 Expected Reward: ${expected_reward:,.2f}")
 st.write(f"⚖️ Reward-to-Risk Ratio: {reward_to_risk:.2f}")
 
-# 🚨 Warnings
+# --- Warnings ---
 if reward_to_risk < 2 and reward_to_risk > 0:
     st.warning("⚠️ Reward-to-risk ratio is below 2:1!")
 if total_trade_cost > liquid_capital:
     st.error("🚫 Trade size exceeds your available capital!")
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 📢 Disclaimer
-# ────────────────────────────────────────────────────────────────────────────────
+# --- Disclaimer Section ---
 st.markdown("---")
 st.subheader("📢 Disclaimer")
 st.markdown("""
