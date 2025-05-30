@@ -46,19 +46,26 @@ else:
 
 safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
 
-# --- Stop Loss & Target Price Inputs ---
-stop_loss_price = st.number_input(
-    "🛑 Stop Loss Price ($)",
-    min_value=0.01,
-    value=safe_suggested_stop
-)
+# Risk amount
+risk_amount = liquid_capital * (risk_percent / 100)
 
-safe_default_target = max(0.01, 0.0)
-target_price = st.number_input(
-    "🎯 Target Price ($)",
-    min_value=0.01,
-    value=safe_default_target
-)
+# Reasonable estimated position size based on max use of capital
+if entry_price > 0 and leverage > 0:
+    estimated_position_size = (liquid_capital * leverage) / entry_price
+else:
+    estimated_position_size = 1  # fallback to prevent division error
+
+# Risk per unit: risk amount / position size
+risk_per_unit = risk_amount / estimated_position_size if estimated_position_size > 0 else 0.01
+
+# Suggested stop based on risk per unit
+if direction == "Long":
+    suggested_stop = entry_price - risk_per_unit
+else:
+    suggested_stop = entry_price + risk_per_unit
+
+safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
+
 
 # --- Core Calculations ---
 risk_per_unit = abs(entry_price - stop_loss_price)
