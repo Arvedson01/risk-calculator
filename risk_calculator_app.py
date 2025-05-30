@@ -1,8 +1,12 @@
 import streamlit as st
 
+# ✅ Set page config FIRST
+st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
+
+# ✅ Now it's safe to clear cache
 st.cache_data.clear()
 
-st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
+# ✅ Then title and content
 st.title("📊 1% Risk Management Calculator (Pro Edition)")
 
 # ─── Page Setup ─────────────────────────────────────────────────────────────
