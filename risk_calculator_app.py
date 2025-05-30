@@ -37,17 +37,26 @@ leverage = st.number_input("🪜 Leverage (e.g. 1 = no leverage)", min_value=1.0
 risk_amount = liquid_capital * (risk_percent / 100)
 
 # --- Suggested Stop Loss Calculation ---
-if entry_price > 0 and leverage > 0:
+valid_inputs = entry_price > 0 and risk_percent > 0 and liquid_capital > 0 and leverage > 0
+
+if valid_inputs:
+    # 1. Calculate risk capital
+    risk_amount = liquid_capital * (risk_percent / 100)
+
+    # 2. Estimate position size
     estimated_position_size = (liquid_capital * leverage) / entry_price
-    risk_per_unit = risk_amount / estimated_position_size if estimated_position_size > 0 else 0.01
 
-    if direction == "Long":
-        suggested_stop = entry_price - risk_per_unit
-    else:
-        suggested_stop = entry_price + risk_per_unit
+    # 3. Calculate the ideal stop loss distance
+    risk_per_unit = risk_amount / estimated_position_size
+
+    # 4. Apply direction
+    suggested_stop = entry_price - risk_per_unit if direction == "Long" else entry_price + risk_per_unit
+
 else:
-    suggested_stop = 0.01  # fallback minimum
+    risk_amount = 0.0
+    suggested_stop = entry_price  # No stop suggested without valid input
 
+# Apply guard
 safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
 
 # --- Stop Loss & Target Price Inputs ---
