@@ -1,113 +1,88 @@
 import streamlit as st
 from PIL import Image
 import matplotlib.pyplot as plt
+import pandas as pd
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 📄 Page Setup
-# ────────────────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
+# 🧱 Page setup
+st.set_page_config(page_title="📊 Risk Calculator", page_icon="📈")
 
-# ────────────────────────────────────────────────────────────────────────────────
 # 🖼️ Logo
-# ────────────────────────────────────────────────────────────────────────────────
 logo = Image.open("logo.png")
 st.image(logo, width=150)
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 📊 App Title
-# ────────────────────────────────────────────────────────────────────────────────
+# 🧭 App title
 st.title("📊 1% Risk Management Calculator")
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🧮 User Inputs
-# ────────────────────────────────────────────────────────────────────────────────
-account_balance = st.number_input("💰 Account Balance", min_value=0.0, value=10000.0)
-risk_percent = st.number_input("⚠️ Risk % per trade", min_value=0.0, max_value=100.0, value=1.0)
-entry_price = st.number_input("🎯 Entry Price", min_value=0.0, value=100.0)
-stop_loss_price = st.number_input("🛑 Stop Loss Price", min_value=0.0, value=95.0)
-target_price = st.number_input("🎯 Target Price", min_value=0.0, value=120.0)
-leverage = st.number_input("📈 Leverage (e.g. 1x, 2x, 5x)", min_value=1.0, value=1.0)
+# 📥 User Inputs
+account_balance = st.number_input("Account Balance", min_value=0.0, value=10000.0)
+risk_percent = st.number_input("Risk % per trade", min_value=0.0, value=1.0)
+entry_price = st.number_input("Entry Price", min_value=0.0, value=100.0)
+stop_loss_price = st.number_input("Stop Loss Price", min_value=0.0, value=95.0)
+target_price = st.number_input("Target Price", min_value=0.0, value=120.0)
+leverage = st.number_input("Leverage (e.g. 1x, 2x, 3x)", min_value=1.0, value=1.0)
 
-# ────────────────────────────────────────────────────────────────────────────────
-# ✅ Validity Check Before Calculations
-# ────────────────────────────────────────────────────────────────────────────────
-if stop_loss_price == entry_price:
-    st.error("❌ Entry and Stop Loss price cannot be the same.")
-elif target_price == entry_price:
-    st.error("❌ Entry and Target price cannot be the same.")
-elif account_balance <= 0 or risk_percent <= 0:
-    st.info("ℹ️ Enter a valid account balance and risk %.")
-else:
-    # ────────────────────────────────────────────────────────────────────────────
-    # 📐 Calculations
-    # ────────────────────────────────────────────────────────────────────────────
-    risk_amount = account_balance * (risk_percent / 100)
-    risk_per_unit = abs(entry_price - stop_loss_price)
-    position_size = risk_amount / risk_per_unit
-    leveraged_size = position_size * leverage
-    total_trade_cost = entry_price * leveraged_size
-    reward_per_unit = abs(target_price - entry_price)
-    reward = reward_per_unit * leveraged_size
-    reward_risk_ratio = reward / risk_amount if risk_amount > 0 else 0
+# 🧮 Core Calculations
+risk_amount = account_balance * (risk_percent / 100)
+risk_per_unit = abs(entry_price - stop_loss_price)
+position_size = risk_amount / risk_per_unit
+total_trade_cost = position_size * entry_price / leverage
+reward_per_unit = abs(target_price - entry_price)
+reward_to_risk = reward_per_unit / risk_per_unit
 
-    # ────────────────────────────────────────────────────────────────────────────
-    # 📊 Results Summary (Metric Columns)
-    # ────────────────────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("📈 Trade Summary")
+# 📊 Styled Table Display (Dark-themed)
+st.subheader("📋 Trade Summary")
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Risk Amount", f"{risk_amount:,.2f}")
-    col2.metric("Position Size", f"{position_size:,.0f} units")
-    col3.metric("With Leverage", f"{leveraged_size:,.0f} units")
+summary_df = pd.DataFrame({
+    "Metric": [
+        "Risk Amount",
+        "Risk per Unit",
+        "Suggested Position Size",
+        "Total Trade Cost (with Leverage)",
+        "Reward-to-Risk Ratio"
+    ],
+    "Value": [
+        f"{risk_amount:,.2f}",
+        f"{risk_per_unit:,.2f}",
+        f"{position_size:,.2f} units",
+        f"{total_trade_cost:,.2f}",
+        f"{reward_to_risk:.2f} : 1"
+    ]
+})
 
-    col4, col5, col6 = st.columns(3)
-    col4.metric("Trade Cost", f"{total_trade_cost:,.2f}")
-    col5.metric("Expected Reward", f"{reward:,.2f}")
-    col6.metric("R:R Ratio", f"{reward_risk_ratio:.2f}")
+st.dataframe(summary_df.style.set_properties(**{
+    'background-color': '#0e1117',
+    'color': '#fafafa',
+    'border-color': '#444'
+}), height=210)
 
-    # Warnings
-    if reward_risk_ratio < 2:
-        st.warning("⚠️ Reward-to-risk ratio is below 2:1!")
-    if total_trade_cost > account_balance:
-        st.error("🚨 Trade size exceeds your available capital!")
+# 📈 Chart Visualization
+st.subheader("📈 Trade Visualization")
 
-    # ────────────────────────────────────────────────────────────────────────────
-    # 📉 Chart
-    # ────────────────────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("📉 Trade Visualization")
+fig, ax = plt.subplots(figsize=(6, 4))
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.axhspan(min(stop_loss_price, entry_price), max(stop_loss_price, entry_price),
-               facecolor='red', alpha=0.3, label="Risk")
-    ax.axhspan(min(entry_price, target_price), max(entry_price, target_price),
-               facecolor='green', alpha=0.3, label="Reward")
-    ax.axhline(stop_loss_price, color='red', linestyle='--', label=f'Stop Loss ({stop_loss_price})')
-    ax.axhline(entry_price, color='orange', linestyle='--', label=f'Entry ({entry_price})')
-    ax.axhline(target_price, color='green', linestyle='--', label=f'Target ({target_price})')
+# Highlight zones
+ax.axhspan(stop_loss_price, entry_price, color='red', alpha=0.2, label='Risk')
+ax.axhspan(entry_price, target_price, color='green', alpha=0.2, label='Reward')
 
-    ax.set_title("Price Zones")
-    ax.set_xlabel("Trade Setup")
-    ax.set_ylabel("Price")
-    ax.legend()
-    ax.grid(True)
-    st.pyplot(fig)
+# Price lines
+ax.axhline(stop_loss_price, color='red', linestyle='--', label=f'Stop Loss ({stop_loss_price})')
+ax.axhline(entry_price, color='orange', linestyle='--', label=f'Entry ({entry_price})')
+ax.axhline(target_price, color='green', linestyle='--', label=f'Target ({target_price})')
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 📢 Disclaimer
-# ────────────────────────────────────────────────────────────────────────────────
+ax.set_xlabel("Trade Setup")
+ax.set_ylabel("Price")
+ax.set_title("Price Zones")
+ax.legend()
+st.pyplot(fig)
+
+# ⚠️ Warnings
+if reward_to_risk < 2:
+    st.warning("⚠️ Warning: Reward-to-risk ratio is below 2:1")
+
+if total_trade_cost > account_balance:
+    st.error("🚫 Warning: This trade exceeds your available capital")
+
+# 📘 Disclaimer
 st.markdown("---")
-st.subheader("📢 Disclaimer")
-st.markdown("""
-This tool is provided for **educational purposes only** and does not constitute financial advice.
-
-Trading financial instruments involves risk, and you should never invest more than you can afford to lose.  
-Always do your own research or consult a licensed financial advisor before making investment decisions.
-
-By using this tool, you acknowledge that you are solely responsible for your trading activity.
-""")
-
-agree = st.checkbox("✅ I acknowledge that I have read and understand the disclaimer above.")
-if not agree:
-    st.warning("Please confirm that you've read the disclaimer to use this calculator.")
+st.markdown("📌 **Disclaimer:** This tool is for educational purposes only and does not constitute financial advice.")
+st.markdown("💡 Always consult with a certified financial professional before making trading decisions.")
