@@ -21,7 +21,6 @@ with st.expander("ℹ️ What this tool does"):
     - Total capital (for context)
     - Liquid capital (for active trade sizing)
     - Your entry price, stop loss, target, and leverage
-    - It will even suggest a stop loss if you're unsure!
     """)
 
 # --- Section: User Inputs ---
@@ -38,34 +37,32 @@ leverage = st.number_input("🪜 Leverage (e.g. 1 = no leverage)", min_value=1.0
 risk_amount = liquid_capital * (risk_percent / 100)
 
 # --- Suggested Stop Loss Calculation ---
-if entry_price > 0 and risk_amount > 0:
-    stop_loss_buffer = risk_amount / leverage / 1000  # simple buffer estimate
-    suggested_stop = entry_price - stop_loss_buffer if direction == "Long" else entry_price + stop_loss_buffer
+if entry_price > 0 and leverage > 0:
+    estimated_position_size = (liquid_capital * leverage) / entry_price
+    risk_per_unit = risk_amount / estimated_position_size if estimated_position_size > 0 else 0.01
+
+    if direction == "Long":
+        suggested_stop = entry_price - risk_per_unit
+    else:
+        suggested_stop = entry_price + risk_per_unit
 else:
     suggested_stop = 0.01  # fallback minimum
 
 safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
 
-# Risk amount
-risk_amount = liquid_capital * (risk_percent / 100)
+# --- Stop Loss & Target Price Inputs ---
+stop_loss_price = st.number_input(
+    "🛑 Stop Loss Price ($)",
+    min_value=0.01,
+    value=safe_suggested_stop
+)
 
-# Reasonable estimated position size based on max use of capital
-if entry_price > 0 and leverage > 0:
-    estimated_position_size = (liquid_capital * leverage) / entry_price
-else:
-    estimated_position_size = 1  # fallback to prevent division error
-
-# Risk per unit: risk amount / position size
-risk_per_unit = risk_amount / estimated_position_size if estimated_position_size > 0 else 0.01
-
-# Suggested stop based on risk per unit
-if direction == "Long":
-    suggested_stop = entry_price - risk_per_unit
-else:
-    suggested_stop = entry_price + risk_per_unit
-
-safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
-
+safe_default_target = max(0.01, 0.0)
+target_price = st.number_input(
+    "🎯 Target Price ($)",
+    min_value=0.01,
+    value=safe_default_target
+)
 
 # --- Core Calculations ---
 risk_per_unit = abs(entry_price - stop_loss_price)
