@@ -13,6 +13,27 @@ st.image(logo, width=150)
 # 🧠 App title
 st.title("📊 1% Risk Management Calculator")
 
+# ℹ️ Tool Explanation
+st.markdown("""
+### ℹ️ What This Tool Does
+
+This calculator helps you size your trades **based on risk**, not guesswork.
+
+It follows a professional trading principle:
+> 📌 *“Never risk more than a fixed % of your capital on any trade.”*
+
+Using your account size, entry and stop prices, and risk tolerance:
+- ✅ It calculates **how many units** you can trade
+- ✅ It shows your **expected reward**
+- ✅ It ensures you don’t over-leverage
+
+The position size is based on your **maximum allowed loss**, not how much capital you’re using.
+
+**Leverage** is used to reduce capital required — it does **not** increase your trade size.
+
+---
+""")
+
 # 📥 User Inputs
 account_balance = st.number_input("Account Balance ($)", min_value=0.0, value=10000.0)
 risk_percent = st.number_input("Risk % per trade", min_value=0.0, max_value=100.0, value=1.0)
