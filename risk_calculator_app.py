@@ -1,5 +1,10 @@
 import streamlit as st
 
+st.cache_data.clear()
+
+st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
+st.title("📊 1% Risk Management Calculator (Pro Edition)")
+
 # ─── Page Setup ─────────────────────────────────────────────────────────────
 st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
 st.title("📊 1% Risk Management Calculator (Pro Edition)")
