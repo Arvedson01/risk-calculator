@@ -46,11 +46,16 @@ else:
 
 safe_suggested_stop = max(round(suggested_stop, 2), 0.01)
 
-# --- Section: Stop Loss & Target Inputs ---
 stop_loss_price = st.number_input(
-    "🛑 Stop Loss Price ($) (Suggested: {:.2f})".format(safe_suggested_stop),
+    "🛑 Stop Loss Price ($)",
     min_value=0.01,
     value=safe_suggested_stop
+)
+
+target_price = st.number_input(
+    "🎯 Target Price ($)",
+    min_value=0.01,
+    value=safe_default_target
 )
 
 safe_default_target = max(0.01, 0.0)  # Prevent StreamlitValueBelowMinError
