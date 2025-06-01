@@ -9,7 +9,6 @@ DEFAULT_RISK_PERCENT = 1.000
 MIN_LEVERAGE = 1.000
 MIN_REWARD_RISK_RATIO = 2.000
 
-
 # ────────────────────────────────────────────────────────────────────────────────
 # 📄 Page Setup (must be the very first Streamlit call)
 # ────────────────────────────────────────────────────────────────────────────────
@@ -268,6 +267,10 @@ def get_user_inputs() -> Tuple[
     Literal["Long", "Short"],  # direction
     float,  # target_price
     float,  # leverage
+    float,  # slippage_pct
+    bool,   # use_atr
+    float,  # atr_value (if used)
+    float   # atr_multiplier (if used)
 ]:
     """
     Gather user inputs and return them. Grouped under subheaders styled by CSS.
@@ -346,7 +349,58 @@ def get_user_inputs() -> Tuple[
             format="%g",
             key="target_price",
         )
+
+        # NEW: Slippage Adjustment
+        slippage_pct = st.number_input(
+            "📉 Estimated Slippage (%)",
+            min_value=0.000,
+            value=0.050, # Default to 0.05%
+            step=0.001,
+            format="%g",
+            key="slippage_pct",
+            help="Factor in potential slippage (e.g., stop-loss fills at a worse price than intended)."
+        ) / 100 # Convert to decimal
+
         st.markdown("</div>", unsafe_allow_html=True) # Close the panel div
+
+    # NEW: ATR Settings (in its own section as it affects stop loss calculation)
+    st.markdown("<h4 style='margin-top: 2rem;'>📊 Volatility-Based Stops (ATR)</h4>", unsafe_allow_html=True)
+    st.markdown("<div>", unsafe_allow_html=True) # New panel for ATR
+    use_atr = st.checkbox(
+        "🔍 Use ATR-Based Stop Loss (Recommended for Volatile Assets)",
+        value=False,
+        key="use_atr",
+        help="Use Average True Range (ATR) to set a dynamic stop loss."
+    )
+
+    atr_value = 0.0
+    atr_multiplier = 0.0
+
+    if use_atr:
+        st.info(
+            "**Note:** ATR is a measure of an asset's volatility. You need to look up "
+            "the current ATR for your specific asset on a charting platform (e.g., "
+            "TradingView) and enter it here. A common period is 14 bars (days/hours)."
+        )
+        atr_value = st.number_input(
+            "📈 Average True Range (ATR) Value",
+            min_value=0.000,
+            value=0.000,
+            step=0.001,
+            format="%g",
+            key="atr_value",
+            help="Enter the ATR value for your asset (e.g., 2.50 for a stock)."
+        )
+        atr_multiplier = st.number_input(
+            "✖️ ATR Multiplier",
+            min_value=0.1,
+            value=1.5,
+            step=0.1,
+            format="%g",
+            key="atr_multiplier",
+            help="Typical values are 1.5 to 3.0. Higher multiplier = wider stop."
+        )
+    st.markdown("</div>", unsafe_allow_html=True) # Close the ATR panel
 
     return (
         total_capital,
@@ -356,6 +410,10 @@ def get_user_inputs() -> Tuple[
         direction,
         target_price,
         leverage,
+        slippage_pct,
+        use_atr,
+        atr_value,
+        atr_multiplier
     )
 
 
@@ -369,48 +427,49 @@ def calculate_trade_metrics(
     direction: Literal["Long", "Short"],
     target_price: float,
     leverage: float,
-    stop_loss_price: float,
+    stop_loss_price: float, # User-entered or ATR-derived stop loss
+    slippage_pct: float,    # NEW: Slippage percentage
 ) -> Tuple[
     float,  # risk_amount
     float,  # position_size
-    float,  # suggested_stop
+    float,  # effective_stop_loss (newly added for clarity)
     float,  # capital_required
     float,  # expected_reward
     float,  # reward_to_risk
 ]:
     """
-    1) risk_amount = liquid_capital * (risk_percent / 100)
-    2) max_units = (liquid_capital * leverage) / entry_price
-    3) required_risk_per_unit = risk_amount / max_units
-    4) suggested_stop = entry_price ± required_risk_per_unit (based on direction)
-    5) actual_risk_per_unit = |entry_price - stop_loss_price|
-    6) position_size = risk_amount / actual_risk_per_unit
-    7) position_value = position_size * entry_price
-    8) capital_required = position_value / leverage
-    9) expected_reward & reward_to_risk
+    Calculates trade metrics including slippage.
     """
     # 1) Dollar amount you’re risking
     risk_amount = liquid_capital * (risk_percent / 100)
 
-    # 2) Theoretical max units if you used 100% margin
-    max_position_value = liquid_capital * leverage
-    max_units = (max_position_value / entry_price) if entry_price > 0 else 0.0
+    # 2) Calculate effective stop loss price due to slippage
+    effective_stop_loss = stop_loss_price
+    if slippage_pct > 0:
+        if direction == "Long":
+            # For long, slippage makes stop lower (worse)
+            effective_stop_loss = stop_loss_price * (1 - slippage_pct)
+        else: # "Short"
+            # For short, slippage makes stop higher (worse)
+            effective_stop_loss = stop_loss_price * (1 + slippage_pct)
 
-    # 3) Required risk per unit to risk EXACTLY risk_amount
-    required_risk_per_unit = (risk_amount / max_units) if max_units > 0 else 0.0
+    # Validate effective stop loss relative to entry price
+    if direction == "Long" and effective_stop_loss >= entry_price:
+        st.error("🚫 For a Long trade, the **effective** Stop Loss Price must be below Entry Price.")
+        st.stop()
+    if direction == "Short" and effective_stop_loss <= entry_price:
+        st.error("🚫 For a Short trade, the **effective** Stop Loss Price must be above Entry Price.")
+        st.stop()
 
-    # 4) Suggested stop
-    if direction == "Long":
-        suggested_stop = entry_price - required_risk_per_unit
-    else:  # "Short"
-        suggested_stop = entry_price + required_risk_per_unit
-    suggested_stop = round(suggested_stop, 3)
+    # 5) Actual risk per unit, based on effective_stop_loss
+    actual_risk_per_unit = abs(entry_price - effective_stop_loss)
 
-    # 5) Actual risk per unit, based on user-entered stop_loss_price
-    actual_risk_per_unit = abs(entry_price - stop_loss_price) if stop_loss_price != entry_price else 0.0
+    if actual_risk_per_unit == 0:
+        st.error("🚫 Cannot calculate position size: Effective Stop Loss Price is too close to Entry Price. Adjust Entry, Stop Loss, or Slippage.")
+        st.stop()
 
     # 6) Final position size that risks exactly risk_amount
-    position_size = (risk_amount / actual_risk_per_unit) if actual_risk_per_unit > 0 else 0.0
+    position_size = (risk_amount / actual_risk_per_unit)
 
     # 7) Compute position_value
     position_value = position_size * entry_price
@@ -426,7 +485,7 @@ def calculate_trade_metrics(
     return (
         risk_amount,
         position_size,
-        suggested_stop,
+        effective_stop_loss, # Return the effective stop for display
         capital_required,
         expected_reward,
         reward_to_risk,
@@ -439,7 +498,7 @@ def calculate_trade_metrics(
 def display_results(
     risk_amount: float,
     position_size: float,
-    suggested_stop: float,
+    effective_stop_loss: float, # Now displaying effective stop
     capital_required: float,
     expected_reward: float,
     reward_to_risk: float,
@@ -467,7 +526,7 @@ def display_results(
     with col1:
         st.metric(label="💰 Max Risk Allowed", value=format_currency(risk_amount))
         st.metric(label="📦 Position Size", value=format_units(position_size))
-        st.metric(label="🛑 Suggested Stop Loss", value=format_currency(suggested_stop))
+        st.metric(label="🛑 Effective Stop Loss", value=format_currency(effective_stop_loss)) # Display effective stop
     with col2:
         st.metric(label="💸 Capital Required", value=format_currency(capital_required))
         st.metric(label="🎯 Expected Reward", value=format_currency(expected_reward))
@@ -494,6 +553,28 @@ def display_results(
                     f"⚠️ Trade uses more than **80%** of your liquid capital "
                     f"(**{format_currency(capital_required)}** > 80% of **{format_currency(liquid_capital)}**)."
                 )
+
+    # NEW: Portfolio Risk Expander
+    with st.expander("🧠 Advanced Risk Management: Portfolio & Volatility Considerations"):
+        st.markdown(
+            """
+            This calculator focuses on single-trade risk, but truly robust risk management extends to your entire portfolio.
+            **Consider these points:**
+
+            **1. Portfolio-Level Risk & Correlation:**
+            Even if each trade risks 1%, having multiple open trades that are **highly correlated** (e.g., several tech stocks, different cryptocurrencies during a market-wide event) can lead to a much larger overall loss if the sector or market crashes.
+            -   **Recommendation:** Limit your total capital at risk across *all* open positions (e.g., to a maximum of 5% of your total capital). Track your open positions and their collective exposure. Avoid overconcentration in any single sector or asset class.
+
+            **2. Liquidity Risk:**
+            Trading in markets with low liquidity (low trading volume) can lead to **significant slippage**, especially with larger position sizes. Your stop-loss might not fill at the price you expect, increasing your actual loss.
+            -   **Recommendation:** Be aware of the average daily volume of the asset you're trading. If your calculated position value is a substantial percentage (e.g., >1% or >5%) of the asset's average daily volume, consider if you can exit without moving the market significantly.
+
+            **3. Dynamic Position Sizing (ATR):**
+            Using ATR (Average True Range) helps set stop losses that are adaptive to an asset's actual volatility, reducing the chance of being stopped out by normal market "noise" and allowing for more appropriate position sizing based on risk. More volatile assets should lead to smaller position sizes if your dollar risk is fixed.
+
+            Remember: This calculator is a powerful tool, but it's part of a larger risk management strategy. Always combine it with comprehensive portfolio tracking and continuous learning about market dynamics.
+            """
+        )
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -542,7 +623,7 @@ def main():
     setup_page()
     display_header()
 
-    # 1️⃣ Gather inputs (excluding Stop Loss)
+    # 1️⃣ Gather inputs (including new slippage and ATR settings)
     (
         total_capital,
         liquid_capital,
@@ -551,18 +632,41 @@ def main():
         direction,
         target_price,
         leverage,
+        slippage_pct,      # NEW
+        use_atr,           # NEW
+        atr_value,         # NEW
+        atr_multiplier     # NEW
     ) = get_user_inputs()
 
     # 2️⃣ Precompute suggested_stop to pre-fill the Stop Loss widget
-    risk_amount = liquid_capital * (risk_percent / 100)
-    max_position_value = liquid_capital * leverage
-    max_units = (max_position_value / entry_price) if entry_price > 0 else 0.0
-    required_risk_per_unit = (risk_amount / max_units) if max_units > 0 else 0.0
-    if direction == "Long":
-        suggested_stop = entry_price - required_risk_per_unit
+    current_suggested_stop = 0.0
+
+    if use_atr and atr_value > 0 and atr_multiplier > 0:
+        # NEW: ATR-based suggested stop
+        atr_distance = atr_value * atr_multiplier
+        if direction == "Long":
+            current_suggested_stop = entry_price - atr_distance
+        else:  # "Short"
+            current_suggested_stop = entry_price + atr_distance
+        # Ensure it doesn't go below zero for long, or too high for short if entry is low
+        current_suggested_stop = max(0.001, current_suggested_stop) if direction == "Long" else current_suggested_stop
     else:
-        suggested_stop = entry_price + required_risk_per_unit
-    suggested_stop = round(suggested_stop, 3)
+        # Original risk-based suggested stop if ATR is not used or invalid
+        risk_amount_for_suggested_stop = liquid_capital * (risk_percent / 100)
+        max_position_value_for_suggested_stop = liquid_capital * leverage
+        max_units_for_suggested_stop = (max_position_value_for_suggested_stop / entry_price) if entry_price > 0 else 0.0
+        required_risk_per_unit_for_suggested_stop = (risk_amount_for_suggested_stop / max_units_for_suggested_stop) if max_units_for_suggested_stop > 0 else 0.0
+
+        if direction == "Long":
+            current_suggested_stop = entry_price - required_risk_per_unit_for_suggested_stop
+        else:
+            current_suggested_stop = entry_price + required_risk_per_unit_for_suggested_stop
+        # Ensure it doesn't go below zero for long
+        current_suggested_stop = max(0.001, current_suggested_stop) if direction == "Long" else current_suggested_stop
+
+    # Round the suggested stop for display
+    current_suggested_stop = round(current_suggested_stop, 3)
+
 
     # 3️⃣ Show the Stop Loss widget (pre-filled with suggested_stop, with 🛑 icon)
     # The stop loss input needs to be outside the input panels as it's computed
@@ -572,11 +676,11 @@ def main():
     stop_loss_price = st.number_input(
         "🛑 Stop Loss Price ($)",
         min_value=0.000,
-        value=suggested_stop,
+        value=current_suggested_stop, # Use the calculated suggested stop
         step=0.001,
         format="%g",
         key="stop_loss_price",
-        help="Pre-filled with suggested stop-loss; override as needed.",
+        help="Pre-filled with suggested stop-loss (ATR-based if enabled); override as needed.",
     )
     st.markdown("</div>", unsafe_allow_html=True) # Close the stop loss panel
 
@@ -584,7 +688,7 @@ def main():
     (
         risk_amount,
         position_size,
-        suggested_stop,    # Should match above
+        effective_stop_loss, # Now includes slippage
         capital_required,
         expected_reward,
         reward_to_risk,
@@ -596,13 +700,14 @@ def main():
         target_price,
         leverage,
         stop_loss_price,
+        slippage_pct, # Pass slippage to calculation
     )
 
     # 5️⃣ Show results + warnings
     display_results(
         risk_amount,
         position_size,
-        suggested_stop,
+        effective_stop_loss, # Pass the effective stop loss
         capital_required,
         expected_reward,
         reward_to_risk,
