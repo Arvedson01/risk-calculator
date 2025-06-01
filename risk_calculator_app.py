@@ -39,7 +39,7 @@ def display_header(logo_path: str = "logo.png"):
     - 🧮 Risk exactly 1% of your **liquid capital** per trade
     - 🛑 Calculate optimal position size and stop loss
     - 🎯 Show reward-to-risk based on your chosen target price
-    - 🪜 Factor in leverage to calculate **capital required**
+    - 🧬 Factor in leverage to calculate **capital required**
     - ⚠️ Warn if your capital or risk rules would be violated
     """)
 
