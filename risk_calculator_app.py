@@ -1,15 +1,20 @@
-I need to know if this code is correct:
-
 import streamlit as st
 from PIL import Image
 from typing import Literal, Tuple
+import logging
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Constants
 # ────────────────────────────────────────────────────────────────────────────────
 DEFAULT_RISK_PERCENT = 1.000
 MIN_LEVERAGE = 1.000
+MAX_LEVERAGE_WARNING = 10.000  # Threshold for high leverage warning
 MIN_REWARD_RISK_RATIO = 2.000
+DEFAULT_SLIPPAGE = 0.100  # 0.1% more realistic for crypto
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 📄 Page Setup (must be the very first Streamlit call)
@@ -241,19 +246,20 @@ def display_header(logo_path: str = "logo.png"):
         with col1:
             st.image(logo, width=150)
         with col2:
-            st.title("📊 1% Risk Management Calculator (Quantum Ledger)") # Updated title
+            st.title("📊 1% Risk Management Calculator (Quantum Ledger)")
     except FileNotFoundError:
-        st.title("📊 1% Risk Management Calculator (Quantum Ledger)") # Updated title
+        logger.warning("Logo image not found, using default header")
+        st.title("📊 1% Risk Management Calculator (Quantum Ledger)")
 
-    # ─── 2. Enhanced Header with Expander ───────────────────────────────────────
+    # How-to guide expander
     with st.expander("✨ How to Use This Calculator", expanded=True):
         st.markdown(
             """
-            - 💰 Risk exactly **1%** of your **liquid capital** per trade.  
-            - 📉 Calculate an optimal **stop-loss** to precisely risk 1%.  
-            - 📈 See your **reward-to-risk** ratio based on your chosen target price.  
-            - 🔗 Factor in **leverage** to compute the **capital required**.  
-            - ⚠️ Get **alerts** if your capital or risk rules are violated.  
+            - 💰 Risk exactly **1%** of your **liquid capital** per trade  
+            - 📉 Calculate an optimal **stop-loss** to precisely risk 1%  
+            - 📈 See your **reward-to-risk** ratio based on your chosen target price  
+            - 🔗 Factor in **leverage** to compute the **capital required**  
+            - ⚠️ Get **alerts** if your capital or risk rules are violated  
             """
         )
 
@@ -262,28 +268,16 @@ def display_header(logo_path: str = "logo.png"):
 # 📝 User Inputs
 # ────────────────────────────────────────────────────────────────────────────────
 def get_user_inputs() -> Tuple[
-    float,  # total_capital
-    float,  # liquid_capital
-    float,  # risk_percent
-    float,  # entry_price
-    Literal["Long", "Short"],  # direction
-    float,  # target_price
-    float,  # leverage
-    float,  # slippage_pct
-    bool,   # use_atr
-    float,  # atr_value (if used)
-    float   # atr_multiplier (if used)
+    float, float, float, float, Literal["Long", "Short"], float, float, float, bool, float, float
 ]:
-    """
-    Gather user inputs and return them. Grouped under subheaders styled by CSS.
-    """
+    """Gather user inputs with improved validation and defaults."""
     col1, col2 = st.columns(2, gap="medium")
 
     # Panel for Capital Settings
     with col1:
         st.markdown("<h4>🏦 Capital Settings</h4>", unsafe_allow_html=True)
-        # Wrap inputs in a div to apply panel styling below h4
         st.markdown("<div>", unsafe_allow_html=True)
+        
         total_capital = st.number_input(
             "💼 Total Capital ($)",
             min_value=0.000,
@@ -319,14 +313,15 @@ def get_user_inputs() -> Tuple[
             step=0.001,
             format="%g",
             key="leverage",
+            help="Higher leverage increases both potential gains and losses"
         )
-        st.markdown("</div>", unsafe_allow_html=True) # Close the panel div
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # Panel for Trade Settings
     with col2:
         st.markdown("<h4>📊 Trade Settings</h4>", unsafe_allow_html=True)
-        # Wrap inputs in a div to apply panel styling below h4
         st.markdown("<div>", unsafe_allow_html=True)
+        
         entry_price = st.number_input(
             "🎯 Entry Price ($)",
             min_value=0.001,
@@ -352,38 +347,41 @@ def get_user_inputs() -> Tuple[
             key="target_price",
         )
 
-        # NEW: Slippage Adjustment
         slippage_pct = st.number_input(
             "📉 Estimated Slippage (%)",
             min_value=0.000,
-            value=0.050, # Default to 0.05%
+            value=DEFAULT_SLIPPAGE,
             step=0.001,
             format="%g",
             key="slippage_pct",
-            help="Factor in potential slippage (e.g., stop-loss fills at a worse price than intended)."
-        ) / 100 # Convert to decimal
+            help="Typical values: 0.1% for crypto, 0.05% for liquid stocks"
+        ) / 100  # Convert to decimal
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("</div>", unsafe_allow_html=True) # Close the panel div
-
-    # NEW: ATR Settings (in its own section as it affects stop loss calculation)
+    # ATR Settings Panel
     st.markdown("<h4 style='margin-top: 2rem;'>📊 Volatility-Based Stops (ATR)</h4>", unsafe_allow_html=True)
-    st.markdown("<div>", unsafe_allow_html=True) # New panel for ATR
+    st.markdown("<div>", unsafe_allow_html=True)
+    
     use_atr = st.checkbox(
         "🔍 Use ATR-Based Stop Loss (Recommended for Volatile Assets)",
         value=False,
         key="use_atr",
-        help="Use Average True Range (ATR) to set a dynamic stop loss."
+        help="[How to find ATR on TradingView](https://www.tradingview.com/support/solutions/43000502348-average-true-range-atr/)"
     )
 
     atr_value = 0.0
     atr_multiplier = 0.0
 
     if use_atr:
-        st.info(
-            "**Note:** ATR is a measure of an asset's volatility. You need to look up "
-            "the current ATR for your specific asset on a charting platform (e.g., "
-            "TradingView) and enter it here. A common period is 14 bars (days/hours)."
-        )
+        atr_help = """
+        **ATR Guide:**  
+        - Find ATR(14) on your charting platform (e.g., TradingView)  
+        - Common periods: 14 bars (days/hours)  
+        - Typical values: 2.5 for stocks, 50-200 for crypto  
+        """
+        st.markdown(atr_help)
+        
         atr_value = st.number_input(
             "📈 Average True Range (ATR) Value",
             min_value=0.000,
@@ -391,8 +389,11 @@ def get_user_inputs() -> Tuple[
             step=0.001,
             format="%g",
             key="atr_value",
-            help="Enter the ATR value for your asset (e.g., 2.50 for a stock)."
         )
+        
+        if use_atr and atr_value <= 0:
+            st.warning("⚠️ ATR value must be positive when ATR is enabled")
+        
         atr_multiplier = st.number_input(
             "✖️ ATR Multiplier",
             min_value=0.1,
@@ -400,9 +401,9 @@ def get_user_inputs() -> Tuple[
             step=0.1,
             format="%g",
             key="atr_multiplier",
-            help="Typical values are 1.5 to 3.0. Higher multiplier = wider stop."
+            help="1.5-2.0 for day trading, 2.0-3.0 for swing trading"
         )
-    st.markdown("</div>", unsafe_allow_html=True) # Close the ATR panel
+    st.markdown("</div>", unsafe_allow_html=True)
 
     return (
         total_capital,
@@ -429,57 +430,48 @@ def calculate_trade_metrics(
     direction: Literal["Long", "Short"],
     target_price: float,
     leverage: float,
-    stop_loss_price: float, # User-entered or ATR-derived stop loss
-    slippage_pct: float,    # NEW: Slippage percentage
-) -> Tuple[
-    float,  # risk_amount
-    float,  # position_size
-    float,  # effective_stop_loss (newly added for clarity)
-    float,  # capital_required
-    float,  # expected_reward
-    float,  # reward_to_risk
-]:
-    """
-    Calculates trade metrics including slippage.
-    """
-    # 1) Dollar amount you’re risking
+    stop_loss_price: float,
+    slippage_pct: float,
+) -> Tuple[float, float, float, float, float, float]:
+    """Enhanced calculations with rounding and leverage checks."""
+    # Validate entry price
+    if entry_price <= 0:
+        st.error("Entry price must be positive.")
+        st.stop()
+
+    # 1) Dollar amount you're risking
     risk_amount = liquid_capital * (risk_percent / 100)
 
-    # 2) Calculate effective stop loss price due to slippage
+    # 2) Calculate effective stop loss with slippage
     effective_stop_loss = stop_loss_price
     if slippage_pct > 0:
         if direction == "Long":
-            # For long, slippage makes stop lower (worse)
             effective_stop_loss = stop_loss_price * (1 - slippage_pct)
-        else: # "Short"
-            # For short, slippage makes stop higher (worse)
+        else:  # "Short"
             effective_stop_loss = stop_loss_price * (1 + slippage_pct)
 
-    # Validate effective stop loss relative to entry price
+    # Validate stop loss
     if direction == "Long" and effective_stop_loss >= entry_price:
-        st.error("🚫 For a Long trade, the **effective** Stop Loss Price must be below Entry Price.")
+        st.error("🚫 For Long trades, Stop Loss must be below Entry Price (accounting for slippage).")
         st.stop()
     if direction == "Short" and effective_stop_loss <= entry_price:
-        st.error("🚫 For a Short trade, the **effective** Stop Loss Price must be above Entry Price.")
+        st.error("🚫 For Short trades, Stop Loss must be above Entry Price (accounting for slippage).")
         st.stop()
 
-    # 5) Actual risk per unit, based on effective_stop_loss
+    # Calculate actual risk per unit
     actual_risk_per_unit = abs(entry_price - effective_stop_loss)
-
     if actual_risk_per_unit == 0:
-        st.error("🚫 Cannot calculate position size: Effective Stop Loss Price is too close to Entry Price. Adjust Entry, Stop Loss, or Slippage.")
+        st.error("Stop Loss too close to Entry Price. Adjust your stop or slippage.")
         st.stop()
 
-    # 6) Final position size that risks exactly risk_amount
-    position_size = (risk_amount / actual_risk_per_unit)
+    # Position size (rounded to 3 decimal places for crypto)
+    position_size = round(risk_amount / actual_risk_per_unit, 3)
 
-    # 7) Compute position_value
+    # Capital required with leverage warning
     position_value = position_size * entry_price
-
-    # 8) Capital required (accounting for leverage)
     capital_required = (position_value / leverage) if leverage > 0 else 0.0
 
-    # 9) Reward calculations
+    # Reward calculations
     reward_per_unit = abs(target_price - entry_price)
     expected_reward = reward_per_unit * position_size
     reward_to_risk = (expected_reward / risk_amount) if risk_amount > 0 else 0.0
@@ -487,7 +479,7 @@ def calculate_trade_metrics(
     return (
         risk_amount,
         position_size,
-        effective_stop_loss, # Return the effective stop for display
+        effective_stop_loss,
         capital_required,
         expected_reward,
         reward_to_risk,
@@ -500,123 +492,85 @@ def calculate_trade_metrics(
 def display_results(
     risk_amount: float,
     position_size: float,
-    effective_stop_loss: float, # Now displaying effective stop
+    effective_stop_loss: float,
     capital_required: float,
     expected_reward: float,
     reward_to_risk: float,
     liquid_capital: float,
+    leverage: float,
+    direction: str,
+    entry_price: float,
 ):
-    """
-    Show the trade summary in two columns, preceded by a divider,
-    then put any warnings inside an expander.
-    """
-    st.markdown("---")  # 3. Divider before Trade Summary
-    st.subheader("📈 Trade Summary")
-
+    """Enhanced results display with additional warnings."""
+    # Formatting functions
     def format_currency(val: float) -> str:
-        # Hide “.000” if it’s a whole number; show .xxx only if needed
-        if abs(val) < 0.001:
-            return "$0.000"
         return f"${val:,.3f}" if (val % 1) != 0 else f"${int(val):,}"
 
     def format_units(val: float) -> str:
-        if val == 0:
-            return "0 units"
         return f"{val:,.3f} units" if (val % 1) != 0 else f"{int(val):,} units"
+
+    # Trade Summary
+    st.markdown("---")
+    st.subheader("📈 Trade Summary")
 
     col1, col2 = st.columns(2, gap="medium")
     with col1:
-        st.metric(label="💰 Max Risk Allowed", value=format_currency(risk_amount))
-        st.metric(label="📦 Position Size", value=format_units(position_size))
-        st.metric(label="🛑 Effective Stop Loss", value=format_currency(effective_stop_loss)) # Display effective stop
+        st.metric("💰 Max Risk Allowed", format_currency(risk_amount))
+        st.metric("📦 Position Size", format_units(position_size))
+        st.metric("🛑 Effective Stop Loss", format_currency(effective_stop_loss))
     with col2:
-        st.metric(label="💸 Capital Required", value=format_currency(capital_required))
-        st.metric(label="🎯 Expected Reward", value=format_currency(expected_reward))
-        st.metric(label="⚖️ Reward-to-Risk Ratio", value=f"{reward_to_risk:.2f}:1")
+        st.metric("💸 Capital Required", format_currency(capital_required))
+        st.metric("🎯 Expected Reward", format_currency(expected_reward))
+        st.metric("⚖️ Reward-to-Risk", f"{reward_to_risk:.2f}:1")
 
-    # ─── 5. Organize Warnings within an Expander ─────────────────────────────────
-    if (
-        reward_to_risk < MIN_REWARD_RISK_RATIO
-        or capital_required > 0.8 * liquid_capital
-    ):
-        with st.expander("⚠️ Risk Notices", expanded=True):
-            if reward_to_risk < MIN_REWARD_RISK_RATIO:
-                st.warning(
-                    f"⚠️ Reward-to-risk ratio (**{reward_to_risk:.2f}:1**) is below "
-                    f"**{MIN_REWARD_RISK_RATIO}:1**. Consider adjusting your target."
-                )
-            if capital_required > liquid_capital:
-                st.error(
-                    f"🚫 Required capital (**{format_currency(capital_required)}**) "
-                    f"exceeds your liquid capital (**{format_currency(liquid_capital)}**)."
-                )
-            elif capital_required > 0.8 * liquid_capital:
-                st.warning(
-                    f"⚠️ Trade uses more than **80%** of your liquid capital "
-                    f"(**{format_currency(capital_required)}** > 80% of **{format_currency(liquid_capital)}**)."
-                )
+    # Warnings Expander
+    with st.expander("⚠️ Risk Notices", expanded=True):
+        # Leverage warning
+        if leverage >= MAX_LEVERAGE_WARNING:
+            st.warning(
+                f"⚡ High leverage detected (**{leverage}x**). "
+                "This significantly increases risk of liquidation."
+            )
 
-    # NEW: Portfolio Risk Expander
-    with st.expander("🧠 Advanced Risk Management: Portfolio & Volatility Considerations"):
-        st.markdown(
-            """
-            This calculator focuses on single-trade risk, but truly robust risk management extends to your entire portfolio.
-            **Consider these points:**
+        # Reward-to-risk warning
+        if reward_to_risk < MIN_REWARD_RISK_RATIO:
+            st.warning(
+                f"⚠️ Reward-to-risk ratio (**{reward_to_risk:.2f}:1**) is below "
+                f"recommended minimum (**{MIN_REWARD_RISK_RATIO}:1**)."
+            )
 
-            **1. Portfolio-Level Risk & Correlation:**
-            Even if each trade risks 1%, having multiple open trades that are **highly correlated** (e.g., several tech stocks, different cryptocurrencies during a market-wide event) can lead to a much larger overall loss if the sector or market crashes.
-            -   **Recommendation:** Limit your total capital at risk across *all* open positions (e.g., to a maximum of 5% of your total capital). Track your open positions and their collective exposure. Avoid overconcentration in any single sector or asset class.
+        # Capital usage warnings
+        if capital_required > liquid_capital:
+            st.error(
+                f"🚫 Required capital (**{format_currency(capital_required)}**) "
+                f"exceeds your liquid capital (**{format_currency(liquid_capital)}**)."
+            )
+        elif capital_required > 0.8 * liquid_capital:
+            st.warning(
+                f"⚠️ Using **{capital_required/liquid_capital:.0%}** of your liquid capital. "
+                "Consider smaller positions for better risk management."
+            )
 
-            **2. Liquidity Risk:**
-            Trading in markets with low liquidity (low trading volume) can lead to **significant slippage**, especially with larger position sizes. Your stop-loss might not fill at the price you expect, increasing your actual loss.
-            -   **Recommendation:** Be aware of the average daily volume of the asset you're trading. If your calculated position value is a substantial percentage (e.g., >1% or >5%) of the asset's average daily volume, consider if you can exit without moving the market significantly.
+        # Volatility warning for tight stops
+        risk_percentage = abs(entry_price - effective_stop_loss) / entry_price * 100
+        if risk_percentage > 10:
+            st.warning(
+                f"🔔 Wide stop detected (**{risk_percentage:.1f}%** from entry). "
+                "Ensure this matches the asset's volatility."
+            )
 
-            **3. Dynamic Position Sizing (ATR):**
-            Using ATR (Average True Range) helps set stop losses that are adaptive to an asset's actual volatility, reducing the chance of being stopped out by normal market "noise" and allowing for more appropriate position sizing based on risk. More volatile assets should lead to smaller position sizes if your dollar risk is fixed.
+    # Advanced Risk Management
+    with st.expander("🧠 Advanced Risk Management", expanded=False):
+        st.markdown("""
+        **Portfolio-Level Considerations:**
+        - 🔗 **Correlation Risk:** Multiple positions in similar assets (e.g., tech stocks) can compound losses
+        - 📉 **Drawdown Control:** Never risk more than 5% of total capital across all open trades
+        - 💧 **Liquidity Risk:** Large positions in low-volume assets may cause slippage
 
-            Remember: This calculator is a powerful tool, but it's part of a larger risk management strategy. Always combine it with comprehensive portfolio tracking and continuous learning about market dynamics.
-            """
-        )
-
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 📢 Disclaimer
-# ────────────────────────────────────────────────────────────────────────────────
-def display_disclaimer():
-    """
-    Right-align the checkbox by splitting into two columns,
-    and use st.info instead of st.warning for the prompt if unchecked.
-    """
-    st.markdown("---")
-    st.subheader("📢 Disclaimer")
-    st.markdown(
-        """
-        **This tool is provided for educational purposes only** and does not constitute financial advice.
-        
-        Trading involves risk. Always consult a licensed financial advisor and only use capital you can afford to lose.
-        """
-    )
-    col1, col2 = st.columns([3, 1], gap="small")
-    with col2:
-        if not st.checkbox(
-            "✅ I understand and accept the disclaimer", key="disclaimer_checkbox"
-        ):
-            st.info("Please acknowledge the disclaimer to proceed.")
-            st.stop()
-
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 📜 Footer
-# ────────────────────────────────────────────────────────────────────────────────
-def display_footer():
-    st.markdown("---")
-    st.markdown(
-        "<p style='text-align: center; color: #7F8C8D; font-size: 0.8em;'>"
-        "© 2025 Quantum Ledger. All rights reserved." # Updated footer text
-        "</p>",
-        unsafe_allow_html=True
-    )
-
+        **Volatility Tools:**
+        - Use [ATR](https://www.tradingview.com/support/solutions/43000502348/) for dynamic stop-loss placement
+        - Monitor [VIX](https://www.tradingview.com/symbols/VIX/) for market volatility
+        """)
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 🚀 Main Application
@@ -625,7 +579,7 @@ def main():
     setup_page()
     display_header()
 
-    # 1️⃣ Gather inputs (including new slippage and ATR settings)
+    # Get user inputs
     (
         total_capital,
         liquid_capital,
@@ -634,94 +588,94 @@ def main():
         direction,
         target_price,
         leverage,
-        slippage_pct,      # NEW
-        use_atr,           # NEW
-        atr_value,         # NEW
-        atr_multiplier     # NEW
+        slippage_pct,
+        use_atr,
+        atr_value,
+        atr_multiplier
     ) = get_user_inputs()
 
-    # 2️⃣ Precompute suggested_stop to pre-fill the Stop Loss widget
+    # Calculate suggested stop loss
     current_suggested_stop = 0.0
-
-    if use_atr and atr_value > 0 and atr_multiplier > 0:
-        # NEW: ATR-based suggested stop
+    if use_atr and atr_value > 0:
         atr_distance = atr_value * atr_multiplier
-        if direction == "Long":
-            current_suggested_stop = entry_price - atr_distance
-        else:  # "Short"
-            current_suggested_stop = entry_price + atr_distance
-        # Ensure it doesn't go below zero for long, or too high for short if entry is low
-        current_suggested_stop = max(0.001, current_suggested_stop) if direction == "Long" else current_suggested_stop
+        current_suggested_stop = (
+            entry_price - atr_distance if direction == "Long" 
+            else entry_price + atr_distance
+        )
+        current_suggested_stop = max(0.001, current_suggested_stop)
     else:
-        # Original risk-based suggested stop if ATR is not used or invalid
-        risk_amount_for_suggested_stop = liquid_capital * (risk_percent / 100)
-        max_position_value_for_suggested_stop = liquid_capital * leverage
-        max_units_for_suggested_stop = (max_position_value_for_suggested_stop / entry_price) if entry_price > 0 else 0.0
-        required_risk_per_unit_for_suggested_stop = (risk_amount_for_suggested_stop / max_units_for_suggested_stop) if max_units_for_suggested_stop > 0 else 0.0
+        risk_amount = liquid_capital * (risk_percent / 100)
+        max_units = (liquid_capital * leverage) / entry_price if entry_price > 0 else 0
+        risk_per_unit = (risk_amount / max_units) if max_units > 0 else 0
+        current_suggested_stop = (
+            entry_price - risk_per_unit if direction == "Long"
+            else entry_price + risk_per_unit
+        )
+        current_suggested_stop = max(0.001, current_suggested_stop)
 
-        if direction == "Long":
-            current_suggested_stop = entry_price - required_risk_per_unit_for_suggested_stop
-        else:
-            current_suggested_stop = entry_price + required_risk_per_unit_for_suggested_stop
-        # Ensure it doesn't go below zero for long
-        current_suggested_stop = max(0.001, current_suggested_stop) if direction == "Long" else current_suggested_stop
-
-    # Round the suggested stop for display
-    current_suggested_stop = round(current_suggested_stop, 3)
-
-
-    # 3️⃣ Show the Stop Loss widget (pre-filled with suggested_stop, with 🛑 icon)
-    # The stop loss input needs to be outside the input panels as it's computed
-    # after the initial inputs.
-    st.markdown("<h4 style='margin-top: 2rem;'>🛑 Stop Loss Adjustment</h4>", unsafe_allow_html=True)
-    st.markdown("<div>", unsafe_allow_html=True) # New panel for Stop Loss
+    # Stop Loss Input
+    st.markdown("<h4>🛑 Stop Loss Adjustment</h4>", unsafe_allow_html=True)
     stop_loss_price = st.number_input(
-        "🛑 Stop Loss Price ($)",
+        "Stop Loss Price ($)",
         min_value=0.000,
-        value=current_suggested_stop, # Use the calculated suggested stop
+        value=round(current_suggested_stop, 3),
         step=0.001,
         format="%g",
         key="stop_loss_price",
-        help="Pre-filled with suggested stop-loss (ATR-based if enabled); override as needed.",
-    )
-    st.markdown("</div>", unsafe_allow_html=True) # Close the stop loss panel
-
-    # 4️⃣ Perform full trade calculations
-    (
-        risk_amount,
-        position_size,
-        effective_stop_loss, # Now includes slippage
-        capital_required,
-        expected_reward,
-        reward_to_risk,
-    ) = calculate_trade_metrics(
-        liquid_capital,
-        risk_percent,
-        entry_price,
-        direction,
-        target_price,
-        leverage,
-        stop_loss_price,
-        slippage_pct, # Pass slippage to calculation
     )
 
-    # 5️⃣ Show results + warnings
+    # Calculate metrics
+    try:
+        (
+            risk_amount,
+            position_size,
+            effective_stop_loss,
+            capital_required,
+            expected_reward,
+            reward_to_risk,
+        ) = calculate_trade_metrics(
+            liquid_capital,
+            risk_percent,
+            entry_price,
+            direction,
+            target_price,
+            leverage,
+            stop_loss_price,
+            slippage_pct,
+        )
+    except Exception as e:
+        st.error(f"Calculation error: {str(e)}")
+        st.stop()
+
+    # Display results
     display_results(
         risk_amount,
         position_size,
-        effective_stop_loss, # Pass the effective stop loss
+        effective_stop_loss,
         capital_required,
         expected_reward,
         reward_to_risk,
         liquid_capital,
+        leverage,
+        direction,
+        entry_price,
     )
 
-    # 6️⃣ Show disclaimer at the bottom
-    display_disclaimer()
+    # Disclaimer
+    st.markdown("---")
+    st.subheader("📢 Disclaimer")
+    if not st.checkbox("✅ I understand this is for educational purposes only"):
+        st.warning("Please acknowledge the disclaimer to use the calculator")
+        st.stop()
 
-    # 7️⃣ Show footer
-    display_footer()
-
+    # Footer
+    st.markdown("---")
+    st.markdown(
+        "<p style='text-align: center; color: #7F8C8D; font-size: 0.8em;'>"
+        "© 2025 Quantum Ledger. Not financial advice."
+        "</p>",
+        unsafe_allow_html=True
+    )
 
 if __name__ == "__main__":
     main()
