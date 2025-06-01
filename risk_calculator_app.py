@@ -50,7 +50,6 @@ def get_user_inputs() -> Tuple[float, float, float, float, Literal["Long", "Shor
     """Collect and return all user inputs in a two‐column layout."""
     col1, col2 = st.columns(2)
 
-    # Left column: Total Capital, Liquid Capital, Risk %, Entry Price
     with col1:
         total_capital = st.number_input(
             "💼 Total Capital ($)",
@@ -85,7 +84,6 @@ def get_user_inputs() -> Tuple[float, float, float, float, Literal["Long", "Shor
             format="%.3f"
         )
 
-    # Right column: Long/Short, Stop Loss, Target Price, Leverage
     with col2:
         direction = st.radio(
             "📈 Are you going long or short?",
@@ -93,11 +91,9 @@ def get_user_inputs() -> Tuple[float, float, float, float, Literal["Long", "Shor
             horizontal=True
         )
 
-        # Note: We supply a “dummy default” for Stop Loss here.
-        # Later, in calculate_trade_metrics(), we’ll replace it with
-        # our auto‐suggested stop. This line just reserves the slot
-        # so the columns stay aligned.
-        stop_loss_price_input = st.number_input(
+        # We put a “dummy” Stop Loss here just to balance the columns.
+        # It will be overridden by the actual suggestion later.
+        dummy_stop = st.number_input(
             "🛑 Stop Loss Price ($)",
             min_value=0.000,
             value=99.000,
@@ -121,8 +117,6 @@ def get_user_inputs() -> Tuple[float, float, float, float, Literal["Long", "Shor
             format="%.3f"
         )
 
-    # Return the raw inputs. We’ll ignore the “dummy” stop_loss_price_input here
-    # and compute the real suggested stop inside calculate_trade_metrics().
     return total_capital, liquid_capital, risk_percent, entry_price, direction, target_price, leverage
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -145,7 +139,7 @@ def calculate_trade_metrics(
     max_units = max_position_value / entry_price if entry_price > 0 else 0.0
     int_max_units = int(max_units)  # round down to whole units
     
-    # 3) How much “price distance” per unit would put that max_units at exactly risk_amount?
+    # 3) How much “price distance” per unit would put those max_units at exactly risk_amount?
     if int_max_units > 0:
         required_risk_per_unit = risk_amount / int_max_units
     else:
@@ -157,13 +151,15 @@ def calculate_trade_metrics(
     else:  # Short
         suggested_stop = entry_price + required_risk_per_unit
 
-    # 5) Now ask the user to confirm/override that suggested stop:
+    # 5) Now ask the user to confirm/override that suggested stop.
+    #    We give it a unique key so it doesn’t collide with the “dummy” from get_user_inputs().
     stop_loss_price = st.number_input(
         "🛑 Stop Loss Price ($)",
         min_value=0.000,
         value=round(suggested_stop, 3),
         step=0.001,
-        format="%.3f"
+        format="%.3f",
+        key="stop_loss_override"   # <— this key is unique
     )
 
     # 6) Re‐compute actual risk per unit based on what the user entered above
@@ -210,7 +206,7 @@ def display_results(
     """Display the trade summary and warnings."""
     st.subheader("📈 Trade Summary")
     
-    # Formatting helpers (strip trailing zeros)
+    # Formatting helpers (strip trailing zeros when not needed)
     def strip_zeros_fmt(fmt_str: str) -> str:
         # e.g. turns "1,234.500" → "1,234.5", and "1,000.000" → "1,000"
         return fmt_str.rstrip('0').rstrip('.') if '.' in fmt_str else fmt_str
@@ -271,7 +267,7 @@ def main():
     setup_page()
     display_header()
     
-    # Get user inputs (now perfectly symmetrical: 4 inputs on left, 4 on right)
+    # Get user inputs (4 widgets on left, 4 widgets on right)
     total_capital, liquid_capital, risk_percent, entry_price, direction, target_price, leverage = get_user_inputs()
     
     # Perform calculations
