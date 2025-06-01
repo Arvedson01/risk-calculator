@@ -41,7 +41,7 @@ def display_header(logo_path: str = "logo.png"):
         - 🧮 Risk exactly 1% of your **liquid capital** per trade  
         - 🛑 Calculate an optimal stop loss so that you risk precisely 1%  
         - 🎯 Show reward-to-risk based on your chosen target price  
-        - 🪜 Factor in leverage to compute **capital required**  
+        - 🧬 Factor in leverage to compute **capital required**  
         - ⚠️ Warn you if your capital or risk rules would be violated  
         """
     )
