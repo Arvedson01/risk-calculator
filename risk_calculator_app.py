@@ -21,13 +21,47 @@ def setup_page():
     )
     st.cache_data.clear()
 
+    # ─── Custom CSS Styling ──────────────────────────────────────────────────────
+    st.markdown(
+        """
+        <style>
+            /* Improve spacing between input widgets */
+            .stNumberInput, .stRadio, .stCheckbox {
+                margin-bottom: 1rem;
+            }
+            
+            /* Style metric cards */
+            .stMetric {
+                background-color: #0E1117;
+                border-radius: 0.5rem;
+                padding: 0.5rem 1rem;
+                margin: 0.25rem 0;
+            }
+            
+            /* Style warning and error boxes */
+            .stWarning, .stError {
+                border-radius: 0.5rem;
+                padding: 0.75rem 1rem;
+            }
+            
+            /* Section headers (e.g. subheaders) */
+            .stMarkdown h2 {
+                border-bottom: 1px solid #2b3138;
+                padding-bottom: 0.3rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 🖼️ Logo and Header
 # ────────────────────────────────────────────────────────────────────────────────
 def display_header(logo_path: str = "logo.png"):
     """
-    Show a logo (if it exists) plus the app title and a short bullet list.
+    Display a logo (if present) and the app title, plus an expandable
+    “How to use this calculator” section.
     """
     try:
         logo = Image.open(logo_path)
@@ -39,16 +73,16 @@ def display_header(logo_path: str = "logo.png"):
     except FileNotFoundError:
         st.title("📊 1% Risk Management Calculator (Pro Edition)")
 
-    st.markdown(
-        """
-        This calculator helps you:
-        - 🧮 Risk exactly 1% of your **liquid capital** per trade  
-        - 🛑 Calculate an optimal stop‐loss to risk precisely 1%  
-        - 🎯 Show reward‐to‐risk based on your chosen target price  
-        - 🧬 Factor in leverage to compute **capital required**  
-        - ⚠️ Warn if your capital or risk rules would be violated  
-        """
-    )
+    with st.expander("✨ How to use this calculator", expanded=True):
+        st.markdown(
+            """
+            - 🧮 Risk exactly 1% of your **liquid capital** per trade  
+            - 🛑 Calculate an optimal stop‐loss to risk precisely 1%  
+            - 🎯 Show reward‐to‐risk based on your chosen target price  
+            - 🧬 Factor in leverage to compute **capital required**  
+            - ⚠️ Warn if your capital or risk rules would be violated  
+            """
+        )
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -66,11 +100,11 @@ def get_user_inputs() -> Tuple[
       - direction (Long/Short)
       - target_price
       - leverage
-    (We compute suggested_stop separately and supply it to the Stop Loss widget below.)
     """
-    col1, col2 = st.columns(2, gap="small")
+    col1, col2 = st.columns(2, gap="medium")
 
     with col1:
+        st.markdown("#### Capital Settings")
         total_capital = st.number_input(
             "💼 Total Capital ($)",
             min_value=0.000,
@@ -99,13 +133,14 @@ def get_user_inputs() -> Tuple[
         leverage = st.number_input(
             "🧬 Leverage (e.g. 1 = no leverage)",
             min_value=MIN_LEVERAGE,
-            value=MIN_LEVERAGE,
+            value=1.000,
             step=0.001,
             format="%g",
             key="leverage",
         )
 
     with col2:
+        st.markdown("#### Trade Settings")
         entry_price = st.number_input(
             "🎯 Entry Price ($)",
             min_value=0.001,
@@ -128,7 +163,7 @@ def get_user_inputs() -> Tuple[
             format="%g",
             key="target_price",
         )
-        # We leave Stop Loss out here; we’ll insert it later once we know "suggested_stop"
+        # Stop Loss will be inserted after suggested_stop is computed
 
     return total_capital, liquid_capital, risk_percent, entry_price, direction, target_price, leverage
 
@@ -219,13 +254,12 @@ def display_results(
     reward_to_risk: float,
     liquid_capital: float,
 ):
-    """Show the Trade Summary metrics and any warnings."""
+    """Show the Trade Summary metrics and warnings in two columns."""
     st.subheader("📈 Trade Summary")
 
     def format_currency(val: float) -> str:
         if abs(val) < 0.001:
             return "$0.000"
-        # Show 3 decimals if any fractional part, otherwise whole number
         return f"${val:,.3f}" if (val % 1) != 0 else f"${int(val):,}"
 
     def format_units(val: float) -> str:
@@ -233,33 +267,41 @@ def display_results(
             return "0 units"
         return f"{val:,.3f} units" if (val % 1) != 0 else f"{int(val):,} units"
 
-    metrics = {
-        "💰 Max Risk Allowed": format_currency(risk_amount),
-        "📦 Position Size": format_units(position_size),
-        "🛑 Suggested Stop Loss": format_currency(suggested_stop),
-        "💸 Capital Required": format_currency(capital_required),
-        "🎯 Expected Reward": format_currency(expected_reward),
-        "⚖️ Reward-to-Risk Ratio": f"{reward_to_risk:.2f}:1",
-    }
+    col1, col2 = st.columns(2, gap="medium")
+    with col1:
+        st.metric(label="💰 Max Risk Allowed", value=format_currency(risk_amount))
+        st.metric(label="📦 Position Size", value=format_units(position_size))
+        st.metric(label="🛑 Suggested Stop Loss", value=format_currency(suggested_stop))
+    with col2:
+        st.metric(label="💸 Capital Required", value=format_currency(capital_required))
+        st.metric(label="🎯 Expected Reward", value=format_currency(expected_reward))
+        st.metric(label="⚖️ Reward-to-Risk Ratio", value=f"{reward_to_risk:.2f}:1")
 
-    for label, val in metrics.items():
-        st.metric(label=label, value=val)
-
-    # Warnings
-    if reward_to_risk < MIN_REWARD_RISK_RATIO:
-        st.warning("⚠️ Reward-to-risk ratio is below 2:1. Consider adjusting your target.")
-    if capital_required > liquid_capital:
-        st.error("🚫 This trade requires more capital than your liquid balance!")
-    elif capital_required > 0.8 * liquid_capital:
-        st.warning(
-            "⚠️ This trade uses over 80% of your liquid capital. Consider reducing position size."
-        )
+    # ─── Warnings section in an expander ────────────────────────────────────────
+    if (reward_to_risk < MIN_REWARD_RISK_RATIO) or (capital_required > 0.8 * liquid_capital):
+        with st.expander("⚠️ Risk Notices", expanded=True):
+            if reward_to_risk < MIN_REWARD_RISK_RATIO:
+                st.warning(
+                    f"⚠️ Reward-to-risk ratio is below {MIN_REWARD_RISK_RATIO:.0f}:1. "
+                    "Consider adjusting your target."
+                )
+            if capital_required > liquid_capital:
+                st.error("🚫 This trade requires more capital than your liquid balance!")
+            elif capital_required > 0.8 * liquid_capital:
+                st.warning(
+                    "⚠️ This trade uses over 80% of your liquid capital. "
+                    "Consider reducing position size."
+                )
 
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 📢 Disclaimer
 # ────────────────────────────────────────────────────────────────────────────────
 def display_disclaimer():
+    """
+    Right-align the disclaimer checkbox by using two columns,
+    then call st.stop() if not acknowledged.
+    """
     st.markdown("---")
     st.subheader("📢 Disclaimer")
     st.markdown(
@@ -269,9 +311,11 @@ def display_disclaimer():
         Trading involves risk. Always consult a licensed financial advisor and only use capital you can afford to lose.
         """
     )
-    if not st.checkbox("✅ I understand and accept the disclaimer."):
-        st.warning("Please acknowledge the disclaimer to proceed.")
-        st.stop()
+    col1, col2 = st.columns([3, 1], gap="small")
+    with col2:
+        if not st.checkbox("✅ I understand and accept the disclaimer"):
+            st.warning("Please acknowledge the disclaimer to proceed.")
+            st.stop()
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -281,7 +325,7 @@ def main():
     setup_page()
     display_header()
 
-    # 1️⃣ First, collect everything except Stop Loss
+    # 1️⃣ Gather inputs (except Stop Loss)
     (
         total_capital,
         liquid_capital,
@@ -292,8 +336,7 @@ def main():
         leverage,
     ) = get_user_inputs()
 
-    # 2️⃣ Compute “suggested_stop” so we can pre-fill that Stop Loss field.
-    #     We re‐compute just Steps 1–4 from calculate_trade_metrics().
+    # 2️⃣ Compute “suggested_stop” so Stop Loss can be pre-filled
     risk_amount = liquid_capital * (risk_percent / 100)
     max_position_value = liquid_capital * leverage
     max_units = (max_position_value / entry_price) if entry_price > 0 else 0.0
@@ -304,7 +347,7 @@ def main():
         suggested_stop = entry_price + required_risk_per_unit
     suggested_stop = round(suggested_stop, 3)
 
-    # 3️⃣ Now show the Stop Loss input with default = suggested_stop
+    # 3️⃣ Now show the Stop Loss widget (pre-filled with suggested_stop)
     stop_loss_price = st.number_input(
         "🛑 Stop Loss Price ($)",
         min_value=0.000,
@@ -312,14 +355,14 @@ def main():
         step=0.001,
         format="%g",
         key="stop_loss_price",
-        help="This field is pre‐filled with the suggested stop‐loss; you may override it.",
+        help="Pre‐filled with the suggested stop‐loss; you may override it.",
     )
 
-    # 4️⃣ Run the full calculation, passing in the final stop_loss_price
+    # 4️⃣ Perform full trade calculations
     (
         risk_amount,
         position_size,
-        suggested_stop,   # we already computed above, but return it anyway
+        suggested_stop,    # recomputed but matches earlier
         capital_required,
         expected_reward,
         reward_to_risk,
@@ -333,7 +376,7 @@ def main():
         stop_loss_price,
     )
 
-    # 5️⃣ Show results + warnings
+    # 5️⃣ Display results + warnings
     display_results(
         risk_amount,
         position_size,
@@ -344,7 +387,7 @@ def main():
         liquid_capital,
     )
 
-    # 6️⃣ Show the disclaimer at the very bottom
+    # 6️⃣ Show disclaimer at the bottom
     display_disclaimer()
 
 
