@@ -1,158 +1,288 @@
 import streamlit as st
 from PIL import Image
+from typing import Literal, Tuple
+
+# Constants
+DEFAULT_RISK_PERCENT = 1.000
+MIN_LEVERAGE = 1.000
+MIN_REWARD_RISK_RATIO = 2.000
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 📄 Page Setup (must be first Streamlit call)
 # ────────────────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="1% Risk Calculator", page_icon="📊")
-st.cache_data.clear()
+def setup_page():
+    """Configure page settings and clear cache."""
+    st.set_page_config(
+        page_title="1% Risk Calculator",
+        page_icon="📊",
+        layout="centered"
+    )
+    st.cache_data.clear()
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 🖼️ Logo (optional)
+# 🖼️ Logo and Header
 # ────────────────────────────────────────────────────────────────────────────────
-logo = Image.open("logo.png")
-st.image(logo, width=150)
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 📊 Title & Intro
-# ────────────────────────────────────────────────────────────────────────────────
-st.title("📊 1% Risk Management Calculator (Pro Edition)")
-
-st.markdown("""
-This calculator helps you:
-- 🧮 Risk exactly 1% of your **liquid capital** per trade
-- 🛑 Suggest a stop loss that is 1% away from your entry (long or short)
-- 🎯 Show reward-to-risk based on your chosen target price
-- 🪜 Factor in leverage to calculate **capital required**
-- ⚠️ Warn if your capital or risk rules would be violated
-""")
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 📝 Section: User Inputs (all with 3-decimal precision)
-# ────────────────────────────────────────────────────────────────────────────────
-st.subheader("📥 Inputs")
-
-total_capital = st.number_input(
-    "💼 Total Capital ($)",
-    min_value=0.000,
-    value=0.000,
-    step=0.001,
-    format="%.3f"
-)
-
-liquid_capital = st.number_input(
-    "💧 Liquid Capital for Trading ($)",
-    min_value=0.000,
-    value=0.000,
-    step=0.001,
-    format="%.3f"
-)
-
-risk_percent = st.number_input(
-    "⚠️ Risk % per trade",
-    min_value=0.000,
-    max_value=100.000,
-    value=1.000,
-    step=0.001,
-    format="%.3f"
-)
-
-entry_price = st.number_input(
-    "🎯 Entry Price ($)",
-    min_value=0.000,
-    value=0.000,
-    step=0.001,
-    format="%.3f"
-)
-
-direction = st.radio("📈 Are you going long or short?", ["Long", "Short"])
-
-target_price = st.number_input(
-    "🎯 Target Price ($)",
-    min_value=0.000,
-    value=0.000,
-    step=0.001,
-    format="%.3f"
-)
-
-leverage = st.number_input(
-    "🪜 Leverage (e.g. 1 = no leverage)",
-    min_value=1.000,
-    value=1.000,
-    step=0.100,
-    format="%.3f"
-)
+def display_header(logo_path: str = "logo.png"):
+    """Display logo and introductory content."""
+    try:
+        logo = Image.open(logo_path)
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            st.image(logo, width=150)
+        with col2:
+            st.title("📊 1% Risk Management Calculator (Pro Edition)")
+    except FileNotFoundError:
+        st.title("📊 1% Risk Management Calculator (Pro Edition)")
+    
+    st.markdown("""
+    This calculator helps you:
+    - 🧮 Risk exactly 1% of your **liquid capital** per trade
+    - 🛑 Calculate optimal position size and stop loss
+    - 🎯 Show reward-to-risk based on your chosen target price
+    - 🪜 Factor in leverage to calculate **capital required**
+    - ⚠️ Warn if your capital or risk rules would be violated
+    """)
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 🧮 Core Calculations
+# 📝 User Inputs
 # ────────────────────────────────────────────────────────────────────────────────
-# 1) How much you can risk in $ (1% of your liquid capital)
-risk_amount = liquid_capital * (risk_percent / 100)
+def get_user_inputs() -> Tuple[float, float, float, float, Literal["Long", "Short"], float, float]:
+    """Collect and return all user inputs."""
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        total_capital = st.number_input(
+            "💼 Total Capital ($)",
+            min_value=0.000,
+            value=10000.000,
+            step=0.001,
+            format="%.3f"
+        )
+        
+        liquid_capital = st.number_input(
+            "💧 Liquid Capital for Trading ($)",
+            min_value=0.000,
+            value=10000.000,
+            step=0.001,
+            format="%.3f"
+        )
+        
+        risk_percent = st.number_input(
+            "⚠️ Risk % per trade",
+            min_value=0.001,
+            max_value=100.000,
+            value=DEFAULT_RISK_PERCENT,
+            step=0.001,
+            format="%.3f"
+        )
 
-# 2) Suggest a stop-loss exactly 1% away from entry
-#    (long → stop = entry – 1%; short → stop = entry + 1%)
-delta = entry_price * (risk_percent / 100)
-
-if direction == "Long":
-    suggested_stop = entry_price - delta
-else:  # Short
-    suggested_stop = entry_price + delta
-
-# 3) Let user override suggested stop (with 3-decimals)
-stop_loss_price = st.number_input(
-    "🛑 Stop Loss Price ($)",
-    min_value=0.000,
-    value=round(suggested_stop, 3),
-    step=0.001,
-    format="%.3f"
-)
-
-# 4) Now recalc risk per unit based on actual stop
-risk_per_unit = abs(entry_price - stop_loss_price) if stop_loss_price != entry_price else 0.000
-
-# 5) Position size so that (risk_per_unit × units) = risk_amount
-position_size = (risk_amount / risk_per_unit) if risk_per_unit > 0 else 0.000
-
-# 6) Capital required (margin) = (position_size × entry_price) ÷ leverage
-capital_required = (position_size * entry_price) / leverage if leverage > 0 else 0.000
-
-# 7) Reward-to-risk calculation
-reward_per_unit = abs(target_price - entry_price)
-expected_reward = reward_per_unit * position_size
-reward_to_risk = (expected_reward / risk_amount) if risk_amount > 0 else 0.000
+    with col2:
+        entry_price = st.number_input(
+            "🎯 Entry Price ($)",
+            min_value=0.001,
+            value=100.000,
+            step=0.001,
+            format="%.3f"
+        )
+        
+        direction = st.radio(
+            "📈 Are you going long or short?",
+            ["Long", "Short"],
+            horizontal=True
+        )
+        
+        target_price = st.number_input(
+            "🎯 Target Price ($)",
+            min_value=0.000,
+            value=105.000,
+            step=0.001,
+            format="%.3f"
+        )
+        
+        leverage = st.number_input(
+            "🪜 Leverage (e.g. 1 = no leverage)",
+            min_value=MIN_LEVERAGE,
+            value=1.000,
+            step=0.001,
+            format="%.3f"
+        )
+    
+    return total_capital, liquid_capital, risk_percent, entry_price, direction, target_price, leverage
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 📈 Output: Trade Summary
+# 🧮 Core Calculations (Fixed)
 # ────────────────────────────────────────────────────────────────────────────────
-st.subheader("📈 Trade Summary")
-
-st.write(f"💰 Max Risk Allowed: ${risk_amount:,.3f}")
-st.write(f"📦 Suggested Position Size: {position_size:,.0f} units")
-st.write(f"🛑 Suggested Stop Loss: ${suggested_stop:,.3f}")
-st.write(f"💸 Capital Required (with leverage): ${capital_required:,.3f}")
-st.write(f"🎯 Expected Reward: ${expected_reward:,.3f}")
-st.write(f"⚖️ Reward-to-Risk Ratio: {reward_to_risk:.2f}")
+def calculate_trade_metrics(
+    liquid_capital: float,
+    risk_percent: float,
+    entry_price: float,
+    direction: Literal["Long", "Short"],
+    target_price: float,
+    leverage: float
+) -> Tuple[float, float, float, float, float, float, float]:
+    """Calculate all trade metrics based on user inputs."""
+    # 1) Calculate maximum allowed risk in dollars
+    risk_amount = liquid_capital * (risk_percent / 100)
+    
+    # 2) Calculate maximum position size with leverage
+    max_position_value = liquid_capital * leverage
+    max_units = max_position_value / entry_price if entry_price > 0 else 0.0
+    int_max_units = int(max_units)  # whole units only
+    
+    # 3) Calculate required stop distance so that int_max_units * risk_per_unit = risk_amount
+    if int_max_units > 0:
+        required_risk_per_unit = risk_amount / int_max_units
+    else:
+        required_risk_per_unit = 0.000
+    
+    # 4) Suggest stop loss based on direction
+    if direction == "Long":
+        suggested_stop = entry_price - required_risk_per_unit
+    else:  # Short
+        suggested_stop = entry_price + required_risk_per_unit
+    
+    # 5) Let user override suggested stop
+    stop_loss_price = st.number_input(
+        "🛑 Stop Loss Price ($)",
+        min_value=0.000,
+        value=round(suggested_stop, 3),
+        step=0.001,
+        format="%.3f"
+    )
+    
+    # 6) Recalculate actual risk per unit based on user's stop
+    actual_risk_per_unit = abs(entry_price - stop_loss_price) if stop_loss_price != entry_price else 0.000
+    
+    # 7) Calculate final position size so (actual_risk_per_unit * units) = risk_amount
+    if actual_risk_per_unit > 0:
+        raw_units = risk_amount / actual_risk_per_unit
+        position_size = float(int(raw_units))  # whole units
+    else:
+        position_size = 0.000
+    
+    # 8) Calculate required capital (margin) = (position_size * entry_price) / leverage
+    position_value = position_size * entry_price
+    capital_required = position_value / leverage if leverage > 0 else 0.000
+    
+    # 9) Reward-to-risk calculation
+    reward_per_unit = abs(target_price - entry_price)
+    expected_reward = reward_per_unit * position_size
+    reward_to_risk = (expected_reward / risk_amount) if risk_amount > 0 else 0.000
+    
+    return (
+        risk_amount,
+        position_size,
+        suggested_stop,
+        capital_required,
+        expected_reward,
+        reward_to_risk,
+        stop_loss_price
+    )
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 🚨 Warnings
+# 📊 Display Results
 # ────────────────────────────────────────────────────────────────────────────────
-if reward_to_risk < 2:
-    st.warning("⚠️ Reward-to-risk ratio is below 2:1.")
-
-if capital_required > liquid_capital:
-    st.error("🚫 This trade exceeds your liquid trading capital!")
+def display_results(
+    risk_amount: float,
+    position_size: float,
+    suggested_stop: float,
+    capital_required: float,
+    expected_reward: float,
+    reward_to_risk: float,
+    liquid_capital: float
+):
+    """Display the trade summary and warnings."""
+    st.subheader("📈 Trade Summary")
+    
+    # Formatting helpers
+    def format_currency(value: float) -> str:
+        return f"${value:,.3f}" if abs(value) >= 0.001 else "$0.000"
+    
+    def format_units(value: float) -> str:
+        if value == 0:
+            return "0 units"
+        return f"{value:,.3f} units" if abs(value) < 1000 else f"{value:,.0f} units"
+    
+    # Display metrics
+    metrics = {
+        "💰 Max Risk Allowed": format_currency(risk_amount),
+        "📦 Position Size": format_units(position_size),
+        "🛑 Suggested Stop Loss": format_currency(suggested_stop),
+        "💸 Capital Required": format_currency(capital_required),
+        "🎯 Expected Reward": format_currency(expected_reward),
+        "⚖️ Reward-to-Risk Ratio": f"{reward_to_risk:.2f}:1"
+    }
+    
+    for label, value in metrics.items():
+        st.metric(label=label, value=value)
+    
+    # Display warnings
+    if reward_to_risk < MIN_REWARD_RISK_RATIO:
+        st.warning(f"⚠️ Reward-to-risk ratio is below {MIN_REWARD_RISK_RATIO:.1f}:1. Consider adjusting your target.")
+    
+    if capital_required > liquid_capital:
+        st.error("🚫 This trade exceeds your liquid trading capital!")
+    elif capital_required > 0.8 * liquid_capital:
+        st.warning("⚠️ This trade uses more than 80% of your liquid capital. Consider reducing position size.")
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 📢 Disclaimer
 # ────────────────────────────────────────────────────────────────────────────────
-st.markdown("---")
-st.subheader("📢 Disclaimer")
-st.markdown("""
-This tool is provided for **educational purposes only** and does not constitute financial advice.
+def display_disclaimer():
+    """Show disclaimer and get user acknowledgment."""
+    st.markdown("---")
+    st.subheader("📢 Disclaimer")
+    st.markdown("""
+    **This tool is provided for educational purposes only** and does not constitute financial advice.
+    
+    Trading involves risk. Always consult a licensed financial advisor and only use capital you can afford to lose.
+    """)
+    
+    if not st.checkbox("✅ I understand and accept the disclaimer."):
+        st.warning("Please acknowledge the disclaimer to proceed.")
+        st.stop()
 
-Trading involves risk. Always consult a licensed financial advisor and only use capital you can afford to lose.
-""")
+# ────────────────────────────────────────────────────────────────────────────────
+# 🚀 Main Application
+# ────────────────────────────────────────────────────────────────────────────────
+def main():
+    setup_page()
+    display_header()
+    
+    # Get user inputs
+    total_capital, liquid_capital, risk_percent, entry_price, direction, target_price, leverage = get_user_inputs()
+    
+    # Perform calculations
+    (
+        risk_amount,
+        position_size,
+        suggested_stop,
+        capital_required,
+        expected_reward,
+        reward_to_risk,
+        stop_loss_price
+    ) = calculate_trade_metrics(
+        liquid_capital,
+        risk_percent,
+        entry_price,
+        direction,
+        target_price,
+        leverage
+    )
+    
+    # Display results and warnings
+    display_results(
+        risk_amount,
+        position_size,
+        suggested_stop,
+        capital_required,
+        expected_reward,
+        reward_to_risk,
+        liquid_capital
+    )
+    
+    # Show disclaimer
+    display_disclaimer()
 
-agree = st.checkbox("✅ I understand and accept the disclaimer.")
-if not agree:
-    st.warning("Please acknowledge the disclaimer to proceed.")
+if __name__ == "__main__":
+    main()
