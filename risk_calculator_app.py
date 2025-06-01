@@ -25,71 +25,169 @@ def setup_page():
     st.markdown(
         """
         <style>
+            /*── Global Styling (Body Background) ──────────────────────────────────*/
+            body {
+                /* A subtle, dark geometric pattern for a futuristic feel */
+                background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92B3' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zm0 40v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0 12v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm-30 0v-4h-2v4H0v2h4v4h2v-4h4v-2H6zm0-40V0h-2v4H0v2h4v4h2V6h4V4H6zm0 12v-4h-2v4H0v2h4v4h2v-4h4v-2H6zm0 12v-4h-2v4H0v2h4v4h2v-4h4v-2H6zm30-12v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM24 2c3.314 0 6 2.686 6 6s-2.686 6-6 6-6-2.686-6-6 2.686-6 6-6zm0 40c3.314 0 6 2.686 6 6s-2.686 6-6 6-6-2.686-6-6 2.686-6 6-6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+                background-color: #0F0F1A; /* Even darker base background */
+            }
+
             /*── General Spacing Improvements ─────────────────────────────────────────*/
             .stNumberInput, .stRadio, .stCheckbox {
                 margin-bottom: 1.25rem; /* Slightly more vertical space */
                 transition: all 0.2s ease-in-out; /* Smooth transition for interaction */
             }
-            .stNumberInput > div > div > input:focus,
-            .stRadio > div > label:hover,
-            .stCheckbox > label:hover {
-                box-shadow: 0 0 0 2px #BB86FC; /* Highlight on focus/hover */
+
+            /*── Number Input Specifics (Digital Readout Look) ────────────────────────*/
+            .stNumberInput > div > div > input {
+                font-family: 'Space Mono', monospace; /* Digital font */
+                background-color: #1A1A2E; /* Darker input background */
+                border: 1px solid #3A3A50; /* Subtle border */
+                border-radius: 0.5rem;
+                padding: 0.75rem 1rem;
+                color: #00FFC0; /* Neon green text for values */
+                transition: all 0.3s ease-in-out;
+            }
+            .stNumberInput > div > div > input:focus {
+                box-shadow: 0 0 0 2px #BB86FC, 0 0 10px #BB86FC; /* Highlight with glow on focus */
                 border-color: #BB86FC;
             }
 
-            /*── Enhanced Metric Cards ────────────────────────────────────────────────*/
+            /*── Radio Button (Long/Short) as Toggle ──────────────────────────────────*/
+            .stRadio > label {
+                background-color: #28283D;
+                border-radius: 0.75rem;
+                padding: 0.5rem 0.75rem;
+                margin-right: 0.5rem; /* Space between options */
+                cursor: pointer;
+                transition: all 0.3s ease;
+                font-weight: bold;
+                color: #E0E0E0;
+            }
+            .stRadio > label:hover {
+                background-color: #3A3A50;
+                transform: translateY(-2px);
+            }
+            /* Style for the actual radio input (hidden) */
+            .stRadio > label > input[type="radio"] {
+                display: none;
+            }
+            /* Style for selected radio option */
+            .stRadio > label > input[type="radio"]:checked + div {
+                background-color: transparent; /* Remove default radio dot */
+            }
+            .stRadio > label > input[type="radio"]:checked + div > p {
+                /* Apply color to the text of the selected option */
+                color: #00FFC0; /* Default selected color */
+            }
+            /* Specific colors for Long/Short selection */
+            .stRadio > div > label:nth-of-type(1) input[type="radio"]:checked + div p {
+                color: #00FF80; /* Green for Long */
+            }
+            .stRadio > div > label:nth-of-type(2) input[type="radio"]:checked + div p {
+                color: #FF6347; /* Red for Short */
+            }
+
+
+            /*── Checkbox Hover ───────────────────────────────────────────────────────*/
+            .stCheckbox > label:hover {
+                box-shadow: 0 0 0 2px #BB86FC; /* Highlight on hover */
+                border-color: #BB86FC;
+            }
+
+            /*── Enhanced Metric Cards (Subtle Glow) ──────────────────────────────────*/
             .stMetric {
-                background-color: #1A1A2E;    /* Darker, richer background */
-                border-radius: 0.75rem;       /* Softer rounded corners */
-                padding: 0.75rem 1.25rem;     /* More padding */
-                margin: 0.4rem 0;             /* Adjusted vertical margin */
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Subtle shadow for depth */
-                transition: transform 0.2s ease-in-out;   /* Smooth hover effect */
+                background-color: #1A1A2E;     /* Darker, richer background */
+                border-radius: 0.75rem;        /* Softer rounded corners */
+                padding: 0.75rem 1.25rem;      /* More padding */
+                margin: 0.4rem 0;              /* Adjusted vertical margin */
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 5px rgba(187, 134, 252, 0.2); /* Subtle glow */
+                transition: transform 0.2s ease-in-out, box-shadow 0.3s ease; /* Smooth hover effect */
+                border: 1px solid #28283D; /* Slight border for definition */
             }
             .stMetric:hover {
                 transform: translateY(-3px); /* Lifts card on hover */
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 15px rgba(187, 134, 252, 0.4); /* Stronger glow on hover */
+            }
+            .stMetric > div[data-testid="stMetricValue"] {
+                color: #00FFC0; /* Neon green for metric values */
+                font-family: 'Space Mono', monospace;
+                font-size: 1.7em; /* Slightly larger value */
+            }
+            .stMetric > div[data-testid="stMetricLabel"] label {
+                color: #90CAF9; /* Lighter blue for labels */
+                font-size: 0.9em;
             }
 
-            /*── Prominent Warning/Error Boxes ───────────────────────────────────────*/
+
+            /*── Prominent Warning/Error Boxes (More Dramatic) ───────────────────────*/
             .stWarning, .stError {
-                background-color: #332B00;           /* Darker warning background */
-                border-left: 5px solid #FFD700;      /* Gold left border for warnings */
+                background-color: #262100;     /* Darker, more intense warning background */
+                border-left: 6px solid #FFD700; /* Thicker, brighter gold left border */
                 border-radius: 0.6rem;
-                padding: 1rem 1.25rem;
-                margin-top: 1.5rem;                  /* More space above warnings */
+                padding: 1.2rem 1.5rem;
+                margin-top: 1.5rem;
                 margin-bottom: 1.5rem;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 8px rgba(255, 215, 0, 0.3); /* Warning glow */
             }
             .stError {
-                background-color: #330000;           /* Darker error background */
-                border-left-color: #FF6347;          /* Tomato red left border for errors */
+                background-color: #260000;     /* Darker, more intense error background */
+                border-left-color: #FF4747;    /* Brighter, more aggressive red for errors */
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 8px rgba(255, 71, 71, 0.4); /* Error glow */
             }
+            /* Bold important text within warnings/errors */
+            .stWarning p strong, .stError p strong {
+                color: inherit; /* Keep existing text color */
+                text-shadow: 0 0 5px rgba(255, 255, 255, 0.5); /* Subtle text glow */
+            }
+
 
             /*── Distinct Section Headers (h2) ────────────────────────────────────────*/
             .stMarkdown h2 {
-                color: #90CAF9;                     /* Lighter blue for headers */
-                border-bottom: 2px solid #2b3138;   /* Slightly thicker border */
+                color: #90CAF9;                /* Lighter blue for headers */
+                border-bottom: 2px solid #2b3138; /* Slightly thicker border */
                 padding-bottom: 0.5rem;
-                margin-top: 2rem;                   /* More space above headers */
+                margin-top: 2rem;
                 margin-bottom: 1.5rem;
-                font-size: 1.8em;                   /* Larger font size */
-                animation: fadeInSlideUp 0.8s ease-out forwards; /* Subtle entrance */
+                font-size: 1.8em;
             }
 
-            /*── Main Title Animation (h1) ───────────────────────────────────────────*/
+            /*── Main Title Animation (h1) with Glow ────────────────────────────────*/
             .stApp h1 {
                 animation: fadeInSlideUp 0.8s ease-out forwards;
-                text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); /* Subtle shadow for depth */
+                text-shadow: 0 0 10px #BB86FC, 0 0 20px #BB86FC; /* Prominent glow */
+                color: #BB86FC; /* Matches glow color */
             }
 
-            /*── Subheaders for input groups (h4) ────────────────────────────────────*/
+            /*── Subheaders for input groups (h4) as Panels ──────────────────────────*/
             .stMarkdown h4 {
-                color: #BB86FC;                     /* Purple for subheaders */
+                color: #BB86FC;                /* Purple for subheaders */
                 margin-top: 1.5rem;
                 margin-bottom: 0.8rem;
                 font-size: 1.2em;
-                border-bottom: 1px dashed #3A3A50;  /* Dashed subtle border */
-                padding-bottom: 0.3rem;
+                border-bottom: none; /* Remove previous dashed border */
+                padding-bottom: 0;
+
+                /* Panel Styling */
+                background-color: #151525; /* Slightly darker than main background */
+                border: 1px solid #28283D;
+                border-radius: 0.75rem;
+                padding: 1rem 1.25rem;
+                box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4), 0 0 5px rgba(187, 134, 252, 0.1); /* Inset shadow for depth, subtle outer glow */
             }
+
+            /* Apply panel styling to the direct parent of h4 for full section */
+            .stMarkdown h4 + div { /* Selects the div immediately following an h4 */
+                background-color: #1A1A2E; /* Matches metric card background */
+                border-bottom-left-radius: 0.75rem;
+                border-bottom-right-radius: 0.75rem;
+                border: 1px solid #28283D;
+                border-top: none; /* Blend with the h4 panel above */
+                padding: 1rem 1.25rem 2rem; /* More padding at bottom of section */
+                margin-top: -0.8rem; /* Pull up to join h4 */
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Outer shadow for the full panel */
+            }
+
 
             /*── Expander styling ────────────────────────────────────────────────────*/
             .streamlit-expanderHeader {
@@ -97,7 +195,8 @@ def setup_page():
                 border-radius: 0.5rem;
                 padding: 0.75rem 1rem;
                 font-weight: bold;
-                color: #E0E0E0;            /* Lighter text for expander header */
+                color: #E0E0E0;             /* Lighter text for expander header */
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3); /* Subtle shadow for expander */
             }
             .streamlit-expanderContent {
                 background-color: #1A1A2E; /* Matches metric card background */
@@ -105,9 +204,12 @@ def setup_page():
                 border-bottom-right-radius: 0.75rem;
                 padding: 1rem;
                 box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+                border: 1px solid #28283D; /* Add border for content */
+                border-top: none;
             }
 
             /*── Title entrance animation ─────────────────────────────────────────────*/
+            @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
             @keyframes fadeInSlideUp {
                 from {
                     opacity: 0;
@@ -138,9 +240,9 @@ def display_header(logo_path: str = "logo.png"):
         with col1:
             st.image(logo, width=150)
         with col2:
-            st.title("📊 1% Risk Management Calculator (Pro Edition)")
+            st.title("📊 1% Risk Management Calculator (Quantum Ledger)") # Updated title
     except FileNotFoundError:
-        st.title("📊 1% Risk Management Calculator (Pro Edition)")
+        st.title("📊 1% Risk Management Calculator (Quantum Ledger)") # Updated title
 
     # ─── 2. Enhanced Header with Expander ───────────────────────────────────────
     with st.expander("✨ How to Use This Calculator", expanded=True):
@@ -172,8 +274,11 @@ def get_user_inputs() -> Tuple[
     """
     col1, col2 = st.columns(2, gap="medium")
 
+    # Panel for Capital Settings
     with col1:
-        st.markdown("#### 🏦 Capital Settings")
+        st.markdown("<h4>🏦 Capital Settings</h4>", unsafe_allow_html=True)
+        # Wrap inputs in a div to apply panel styling below h4
+        st.markdown("<div>", unsafe_allow_html=True)
         total_capital = st.number_input(
             "💼 Total Capital ($)",
             min_value=0.000,
@@ -210,9 +315,13 @@ def get_user_inputs() -> Tuple[
             format="%g",
             key="leverage",
         )
+        st.markdown("</div>", unsafe_allow_html=True) # Close the panel div
 
+    # Panel for Trade Settings
     with col2:
-        st.markdown("#### 📊 Trade Settings")
+        st.markdown("<h4>📊 Trade Settings</h4>", unsafe_allow_html=True)
+        # Wrap inputs in a div to apply panel styling below h4
+        st.markdown("<div>", unsafe_allow_html=True)
         entry_price = st.number_input(
             "🎯 Entry Price ($)",
             min_value=0.001,
@@ -237,8 +346,7 @@ def get_user_inputs() -> Tuple[
             format="%g",
             key="target_price",
         )
-
-        # Stop Loss is inserted after suggested_stop is computed
+        st.markdown("</div>", unsafe_allow_html=True) # Close the panel div
 
     return (
         total_capital,
@@ -421,7 +529,7 @@ def display_footer():
     st.markdown("---")
     st.markdown(
         "<p style='text-align: center; color: #7F8C8D; font-size: 0.8em;'>"
-        "© 2025 1% Risk Calculator. For educational use only."
+        "© 2025 Quantum Ledger. All rights reserved." # Updated footer text
         "</p>",
         unsafe_allow_html=True
     )
@@ -457,6 +565,10 @@ def main():
     suggested_stop = round(suggested_stop, 3)
 
     # 3️⃣ Show the Stop Loss widget (pre-filled with suggested_stop, with 🛑 icon)
+    # The stop loss input needs to be outside the input panels as it's computed
+    # after the initial inputs.
+    st.markdown("<h4 style='margin-top: 2rem;'>🛑 Stop Loss Adjustment</h4>", unsafe_allow_html=True)
+    st.markdown("<div>", unsafe_allow_html=True) # New panel for Stop Loss
     stop_loss_price = st.number_input(
         "🛑 Stop Loss Price ($)",
         min_value=0.000,
@@ -466,6 +578,7 @@ def main():
         key="stop_loss_price",
         help="Pre-filled with suggested stop-loss; override as needed.",
     )
+    st.markdown("</div>", unsafe_allow_html=True) # Close the stop loss panel
 
     # 4️⃣ Perform full trade calculations
     (
