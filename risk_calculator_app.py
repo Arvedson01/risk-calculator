@@ -664,7 +664,10 @@ def main():
     # Disclaimer
     st.markdown("---")
     st.subheader("📢 Disclaimer")
-    if not st.checkbox("✅ I understand this is for educational purposes only"):
+    if not st.checkbox("✅ **This tool is provided for educational purposes only** and does not constitute financial advice.
+        
+        Trading involves risk. Always consult a licensed financial advisor and only use capital you can afford to lose.
+        """):
         st.warning("Please acknowledge the disclaimer to use the calculator")
         st.stop()
 
