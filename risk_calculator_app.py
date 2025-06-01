@@ -39,7 +39,7 @@ def display_header(logo_path: str = "logo.png"):
     - 🧮 Risk exactly 1% of your **liquid capital** per trade
     - 🛑 Calculate optimal position size and stop loss
     - 🎯 Show reward-to-risk based on your chosen target price
-    - 🧬 Factor in leverage to calculate **capital required**
+    - 🪜 Factor in leverage to calculate **capital required**
     - ⚠️ Warn if your capital or risk rules would be violated
     """)
 
@@ -110,7 +110,7 @@ def get_user_inputs() -> Tuple[float, float, float, float, Literal["Long", "Shor
     return total_capital, liquid_capital, risk_percent, entry_price, direction, target_price, leverage
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 🧮 Core Calculations (Fixed)
+# 🧮 Core Calculations
 # ────────────────────────────────────────────────────────────────────────────────
 def calculate_trade_metrics(
     liquid_capital: float,
@@ -127,9 +127,9 @@ def calculate_trade_metrics(
     # 2) Calculate maximum position size with leverage
     max_position_value = liquid_capital * leverage
     max_units = max_position_value / entry_price if entry_price > 0 else 0.0
-    int_max_units = int(max_units)  # whole units only
+    int_max_units = int(max_units)  # use whole units only
     
-    # 3) Calculate required stop distance so that int_max_units * risk_per_unit = risk_amount
+    # 3) Calculate required stop distance so that (int_max_units * risk_per_unit) = risk_amount
     if int_max_units > 0:
         required_risk_per_unit = risk_amount / int_max_units
     else:
@@ -156,7 +156,7 @@ def calculate_trade_metrics(
     # 7) Calculate final position size so (actual_risk_per_unit * units) = risk_amount
     if actual_risk_per_unit > 0:
         raw_units = risk_amount / actual_risk_per_unit
-        position_size = float(int(raw_units))  # whole units
+        position_size = float(int(raw_units))  # round down to whole units
     else:
         position_size = 0.000
     
@@ -194,14 +194,21 @@ def display_results(
     """Display the trade summary and warnings."""
     st.subheader("📈 Trade Summary")
     
-    # Formatting helpers
+    # Formatting helpers (strip trailing zeros)
+    def strip_zeros_fmt(fmt_str: str) -> str:
+        # e.g. "1,234.500" → "1,234.5", or "1,000.000" → "1,000"
+        return fmt_str.rstrip('0').rstrip('.') if '.' in fmt_str else fmt_str
+
     def format_currency(value: float) -> str:
-        return f"${value:,.3f}" if abs(value) >= 0.001 else "$0.000"
+        tmp = f"{value:,.3f}"
+        return "$" + strip_zeros_fmt(tmp)
     
     def format_units(value: float) -> str:
         if value == 0:
             return "0 units"
-        return f"{value:,.3f} units" if abs(value) < 1000 else f"{value:,.0f} units"
+        tmp = f"{value:,.3f}"
+        stripped = strip_zeros_fmt(tmp)
+        return f"{stripped} units"
     
     # Display metrics
     metrics = {
@@ -210,7 +217,7 @@ def display_results(
         "🛑 Suggested Stop Loss": format_currency(suggested_stop),
         "💸 Capital Required": format_currency(capital_required),
         "🎯 Expected Reward": format_currency(expected_reward),
-        "⚖️ Reward-to-Risk Ratio": f"{reward_to_risk:.2f}:1"
+        "⚖️ Reward-to-Risk Ratio": f"{strip_zeros_fmt(f'{reward_to_risk:.3f}')}:1"
     }
     
     for label, value in metrics.items():
